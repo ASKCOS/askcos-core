@@ -28,7 +28,7 @@ import itertools
 import time
 
 
-def build(F_atom = 1, F_bond = 1, N_e = 5, N_h1 = 100, N_h2 = 50, N_h3 = 0, N_c = 500, inner_act = 'tanh',
+def build(F_atom = 1, F_bond = 1, N_e = 5, N_fp = 2048, N_h1 = 100, N_h2 = 50, N_h3 = 0, N_c = 500, inner_act = 'tanh',
 		l2v = 0.01, lr = 0.0003, N_hf = 0, optimizer = 'sgd'):
 	'''
 	Builds the feed forward model.
@@ -105,9 +105,19 @@ def build(F_atom = 1, F_bond = 1, N_e = 5, N_h1 = 100, N_h2 = 50, N_h3 = 0, N_c 
 
 	unscaled_score_flat = Flatten()(unscaled_score)
 
-	score = Activation('softmax')(unscaled_score_flat)
+	# Now add in FP contribution
+	prodFP = Input(shape = (N_c, N_fp))
+	prodFP_hidden = TimeDistributed(
+		Dense(N_hf, activation = inner_act, W_regularizer = l2(l2v))
+	)(prodFP)
+	prodFP_score = TimeDistributed(
+		Dense(1, activation = 'linear', W_regularizer = l2(l2v))
+	)
+	prodFP_score_flat = Flatten()(prodFP_score)
+
+	score = Activation('softmax')(unscaled_score_flat + prodFP_score)
 	
-	model = Model(input = [h_lost, h_gain, bond_lost, bond_gain], output = [score])
+	model = Model(input = [h_lost, h_gain, bond_lost, bond_gain, prodFP], output = [score])
 
 	# Now compile
 	if optimizer in ['adam', 'Adam']:
@@ -123,7 +133,7 @@ def build(F_atom = 1, F_bond = 1, N_e = 5, N_h1 = 100, N_h2 = 50, N_h3 = 0, N_c 
 
 	return model
 
-def train(model, x_files, y_files, z_files, tag = '', split_ratio = 0.8):
+def train(model, x_files, xfp_files, y_files, z_files, tag = '', split_ratio = 0.8):
 
 	hist_fid = open(os.path.join(FROOT, 'hist{}.csv'.format(tag)), 'a')
 	hist_fid.write('epoch,filenum,loss,val_loss,acc,val_acc\n')
@@ -139,10 +149,11 @@ def train(model, x_files, y_files, z_files, tag = '', split_ratio = 0.8):
 				if len(x_files) > 1 or epoch == 0: # get new data
 					z = get_z_data(z_files[fnum])
 					(x_h_lost, x_h_gain, x_bond_lost, x_bond_gain) = get_x_data(x_files[fnum], z)
+					xfp = get_xfp_data(xfp_files[fnum], z)
 					y = get_y_data(y_files[fnum])
 					z = rearrange_for_5fold_cv(z)
 					
-				hist = model.fit([x_h_lost, x_h_gain, x_bond_lost, x_bond_gain], y, 
+				hist = model.fit([x_h_lost, x_h_gain, x_bond_lost, x_bond_gain, xfp], y, 
 					nb_epoch = 1, 
 					batch_size = batch_size, 
 					validation_split = (1 - split_ratio),
@@ -191,6 +202,37 @@ def rearrange_for_5fold_cv(lst):
 	return new_lst
 
 
+def get_xfp_data(fpath, z):
+	'''
+	Reads the candidate SMILES and returns a list of fingerprints
+
+	for the control experiment
+	'''
+
+	# Check if we've already populated these matrices once
+	if os.path.isfile(fpath + '_FP_processed'):
+		with open(fpath + '_FP_processed', 'rb') as infile:
+			FPs = pickle.load(infile)
+			return rearrange_for_5fold_cv(FPs)
+
+	# Otherwise, we need to do it...
+	with open(fpath, 'rb') as infile:
+		all_candidate_smiles = pickle.load(infile)
+		N = len(z)
+		FPs = np.zeros((N, N_c, 1024))
+
+		for i, candidates in enumerate(all_candidate_smiles):
+			for j, candidate in enumerate(candidates):
+				prod = Chem.MolFromSmiles(str(candidate))
+				fp = np.array(AllChem.GetMorganFingerprintAsBitVect(prod, 2, nBits = 1024))
+				FPs[i, j, :] = fp
+
+		# Dump file so we don't have to do that again
+		with open(fpath + '_FP_processed', 'wb') as outfile:
+			pickle.dump(FPs, outfile, pickle.HIGHEST_PROTOCOL)
+		print('Converted {} to FPs for the first (and only) time'.format(fpath))
+		return rearrange_for_5fold_cv(FPs)
+
 def get_x_data(fpath, z):
 	'''
 	Reads the candidate edits and returns an input tensor:
@@ -205,18 +247,6 @@ def get_x_data(fpath, z):
 	if os.path.isfile(fpath + '_processed'):
 		with open(fpath + '_processed', 'rb') as infile:
 			(x_h_lost, x_h_gain, x_bond_lost, x_bond_gain) = pickle.load(infile)
-
-		if mask_input != None:
-			offset = x_bond_lost.shape[-1] - x_h_lost.shape[-1]
-                                # Set atom attributes to zero
-                        x_h_lost[:, :, :, mask_input] = 0 # H_lost
-                        x_h_gain[:, :, :, mask_input] = 0 # H_gain
-                                # Set atom attributes within bond attributes to zero
-                        x_bond_lost[:, :, :, mask_input] = 0 # Bond_lost
-                        x_bond_lost[:, :, :, mask_input + offset] = 0 # Bond_lost
-                        x_bond_gain[:, :, :, mask_input] = 0 # Bond_gain
-                        x_bond_gain[:, :, :, mask_input + offset] = 0 # Bond_gain
-                        print('Set index {} and {} to zero'.format(mask_input, mask_input + offset))
 
 		return (rearrange_for_5fold_cv(x_h_lost), 
 			    rearrange_for_5fold_cv(x_h_gain), 
@@ -257,9 +287,9 @@ def get_x_data(fpath, z):
 		x_bond_lost[np.isnan(x_bond_lost)] = 0.0
 		x_bond_gain[np.isnan(x_bond_gain)] = 0.0
 		x_h_lost[np.isinf(x_h_lost)] = 0.0
-		x_h_gain[np.isinf(x_h_gain)] = 0.0
-		x_bond_lost[np.isinf(x_bond_lost)] = 0.0
-		x_bond_gain[np.isinf(x_bond_gain)] = 0.0
+                x_h_gain[np.isinf(x_h_gain)] = 0.0
+                x_bond_lost[np.isinf(x_bond_lost)] = 0.0
+                x_bond_gain[np.isinf(x_bond_gain)] = 0.0
 
 		# Dump file so we don't have to do that again
 		with open(fpath + '_processed', 'wb') as outfile:
@@ -282,7 +312,7 @@ def get_z_data(fpath):
 		z = pickle.load(infile)
 		return z
 
-def pred_histogram(model, x_files, y_files, z_files, tag = '', split_ratio = 0.8):
+def pred_histogram(model, x_files, xfp_files, y_files, z_files, tag = '', split_ratio = 0.8):
 	'''
 	Given a trained model and a list of samples, this function creates a 
 	histogram of the pseudo-probabilities assigned to the true reaction 
@@ -309,6 +339,7 @@ def pred_histogram(model, x_files, y_files, z_files, tag = '', split_ratio = 0.8
 		# Data must be pre-padded
 		z = get_z_data(z_files[fnum])
 		(x_h_lost, x_h_gain, x_bond_lost, x_bond_gain) = list(get_x_data(x_files[fnum], z))
+		xfp = get_xfp_data(xfp_files[fnum], z)
 		y = get_y_data(y_files[fnum])
 		z = rearrange_for_5fold_cv(z)
 
@@ -320,7 +351,7 @@ def pred_histogram(model, x_files, y_files, z_files, tag = '', split_ratio = 0.8
 			all_edits = pickle.load(infile)
                 all_edits = rearrange_for_5fold_cv(all_edits)
 
-		preds = model.predict([x_h_lost, x_h_gain, x_bond_lost, x_bond_gain], batch_size = batch_size)
+		preds = model.predict([x_h_lost, x_h_gain, x_bond_lost, x_bond_gain, xfp], batch_size = batch_size)
 		print(preds)
                 trueprobs = []
 
@@ -451,13 +482,14 @@ if __name__ == '__main__':
 						help = 'Which fold of the 5-fold CV is this? Defaults 5')
 	parser.add_argument('--optimizer', type = str, default = 'SGD',
 						help = 'Optimizer? Adam or SGD right now, default SGD')
-	parser.add_argument('--mask', type = int, default = -1,
-				help = 'Index of atom attribute to mask, default -1 (none)')	
 	args = parser.parse_args()
 
 	x_files = sorted([os.path.join(args.data, dfile) \
 					for dfile in os.listdir(args.data) \
 					if 'candidate_edits' in dfile and '_processed' not in dfile])
+	xfp_files = sorted([os.path.join(args.data, dfile) \
+					for dfile in os.listdir(args.data) \
+					if 'candidate_smiles' in dfile and '_processed' not in dfile])
 	y_files = sorted([os.path.join(args.data, dfile) \
 					for dfile in os.listdir(args.data) \
 					if 'candidate_bools' in dfile])
@@ -490,7 +522,6 @@ if __name__ == '__main__':
 	lr = float(args.lr)
 	N_c = int(args.Nc) # number of candidate edit sets
 	N_e = 5 # maximum number of edits per class
-	mask_input = int(args.mask) if int(args.mask) != -1 else None
 
 	THIS_FOLD_OUT_OF_FIVE = int(args.fold)
 	tag = args.tag + ' fold{}'.format(args.fold)
@@ -515,14 +546,14 @@ if __name__ == '__main__':
 	if bool(args.test):
                 ## DEBUGGING
                 #train(model, x_files, y_files, z_files, tag = tag, split_ratio = 0.8)
-		pred_histogram(model, x_files, y_files, z_files, tag = tag, split_ratio = 0.8)
+		pred_histogram(model, x_files, xfp_files, y_files, z_files, tag = tag, split_ratio = 0.8)
 		quit(1)
 	elif bool(args.visualize):
 		visualize_weights(model, tag)
 		quit(1)
 
-	hist = train(model, x_files, y_files, z_files, tag = tag, split_ratio = 0.8)
+	hist = train(model, x_files, xfp_files, y_files, z_files, tag = tag, split_ratio = 0.8)
 	model.save_weights(os.path.join(FROOT, 'weights{}.h5'.format(tag)), overwrite = True) 
 
-	pred_histogram(model, x_files, y_files, z_files, tag = tag, split_ratio = 0.8)
+	pred_histogram(model, x_files, xfp_files, y_files, z_files, tag = tag, split_ratio = 0.8)
 	#visualize_weights(model, tag)

@@ -1,5 +1,23 @@
-## Meant to use with Daniel Lowe's patent database
-# reaction SMILES strings only (for now)
+'''
+This script (generate_reaction_templates) uses a MongoDB collection 
+with atom-mapped reaction SMILES strings and parses them into a new 
+collection containing the transforms.
+
+This is intended to be used with the Reaxys database. In the database,
+reagents can contribute atoms to the products. This means that those
+atoms are not mapped in the RXN_SMILES field. The script currently
+leaves those atoms unmapped in the template.
+
+As an example, halogenation might be performed using [Cl][Cl] as a
+chlorinating agent, so the chlorine atom in the product will be 
+unmapped. This script will create a retrosynthetic template that does
+not included a specific precursor containing a Cl atom. Instead, an
+extra field is added to the template document indicating that there 
+is a necessary_reagent fragment (as a generalized SMARTS string).
+
+Additionally, in the cases of unmapped product atoms, those atoms are
+FULLY specified in the product fragment
+'''
 
 from __future__ import print_function
 from global_config import USE_STEREOCHEMISTRY
@@ -21,12 +39,13 @@ from makeit.retro.draw import *
 # DATABASE
 from pymongo import MongoClient    # mongodb plugin
 client = MongoClient('mongodb://guest:guest@rmg.mit.edu/admin', 27017)
-db = client['askcos_transforms']
-template_collection_name = 'lowe_refs_general_v3'
-template_collection = db[template_collection_name]
-db = client['reaction_examples']
-example_collection = db['lowe_1976-2013_USPTOgrants']
-
+db = client['reaxys']
+TRANSFORM_DB = db['transforms_retro_v4']
+REACTION_DB = db['reactions']
+INSTANCE_DB = db['instances']
+CHEMICAL_DB = db['chemicals']
+reaction_smiles_field = 'RXN_SMILES'
+MAXIMUM_NUMBER_UNMAPPED_PRODUCT_ATOMS = 3
 
 def mols_from_smiles_list(all_smiles):
 	'''Given a list of smiles strings, this function creates rdkit
@@ -82,7 +101,7 @@ def atoms_are_different(atom1, atom2, level = 1):
 	if atom1.GetTotalNumHs() != atom2.GetTotalNumHs(): return True
 	if atom1.GetFormalCharge() != atom2.GetFormalCharge(): return True
 	if atom1.GetDegree() != atom2.GetDegree(): return True
-	if atom1.IsInRing() != atom2.IsInRing(): return True
+	#if atom1.IsInRing() != atom2.IsInRing(): return True
 	if atom1.GetNumRadicalElectrons() != atom2.GetNumRadicalElectrons(): return True
 	# TODO: add # pi electrons like ICSynth?
 
@@ -111,7 +130,7 @@ def get_changed_atoms(reactants, products):
 	reac_atoms, reac_atom_tags = get_tagged_atoms_from_mols(reactants)
 	if len(set(prod_atom_tags)) != len(set(reac_atom_tags)):
 		if v: print('warning: different atom tags appear in reactants and products')
-		err = 1
+		#err = 1 # okay for Reaxys, since Reaxys creates mass
 	if len(prod_atoms) != len(reac_atoms):
 		if v: print('warning: total number of tagged atoms differ, stoichometry != 1?')
 		#err = 1
@@ -210,17 +229,9 @@ def convert_atom_to_wildcard(atom):
 	when candidate atoms are used to extend the reaction core for higher
 	generalizability'''
 
-	if SUPER_GENERAL_TEMPLATES:
-		if ':' in atom.GetSmarts():
-			# Fully generalize atom-mappped neighbors because they are aren't a leaving group
-			label = re.search('\:[0-9]+\]', atom.GetSmarts())
-			return '[*{}'.format(label.group())
-
-	if not SUPER_GENERAL_TEMPLATES:
-
-		# Is this a terminal atom? We can tell if the degree is one
-		if atom.GetDegree() == 1:
-			return atom.GetSmarts()
+	# Is this a terminal atom? We can tell if the degree is one
+	if atom.GetDegree() == 1:
+		return Chem.MolFragmentToSmiles(atom.GetOwningMol(), [atom.GetIdx()], allHsExplicit = True)
 
 	# Initialize
 	symbol = '['
@@ -228,16 +239,17 @@ def convert_atom_to_wildcard(atom):
 	# Add atom primitive (don't use COMPLETE wildcards)
 	if atom.GetAtomicNum() != 6:
 		symbol += '#{};'.format(atom.GetAtomicNum())
+		if atom.GetIsAromatic():
+			symbol += 'a;'
 	elif atom.GetIsAromatic():
 		symbol += 'c;'
 	else:
 		symbol += 'C;'
 
-	if not SUPER_GENERAL_TEMPLATES:
-		# Charge is important
-		if atom.GetFormalCharge() != 0:
-			charges = re.search('([-+]+[1-9]?)', atom.GetSmarts())
-			if charges: symbol += charges.group() + ';'
+	# Charge is important
+	if atom.GetFormalCharge() != 0:
+		charges = re.search('([-+]+[1-9]?)', atom.GetSmarts())
+		if charges: symbol += charges.group() + ';'
 
 	# Strip extra semicolon
 	if symbol[-1] == ';': symbol = symbol[:-1]
@@ -255,11 +267,63 @@ def convert_atom_to_wildcard(atom):
 
 	return symbol
 
+def get_strict_smarts_for_atom(atom):
+	'''
+	For an RDkit atom object, generate a SMARTS pattern that
+	matches the atom as strictly as possible
+	'''
+
+	symbol = atom.GetSmarts()
+	if atom.GetSymbol() == 'H':
+		symbol = '[#1]'
+
+	if '[' not in symbol:
+		symbol = '[' + symbol + ']'
+
+	if 'H' not in symbol:
+		H_symbol = 'H{}'.format(atom.GetTotalNumHs())
+		# Explicit number of hydrogens
+		if ':' in symbol: # stick H0 before label
+			symbol = symbol.replace(':', ';{}:'.format(H_symbol))
+		else:
+			symbol = symbol.replace(']', ';{}]'.format(H_symbol))
+			
+	# Explicit formal charge
+	if '+' not in symbol and '-' not in symbol:
+		charge = atom.GetFormalCharge()
+		charge_symbol = '+' if (charge >= 0) else '-'
+		charge_symbol += '{}'.format(abs(charge))
+		if ':' in symbol: 
+			symbol = symbol.replace(':', ';{}:'.format(charge_symbol))
+		else:
+			symbol = symbol.replace(']', ';{}]'.format(charge_symbol))
+
+	# Explicit stereochemistry
+	if USE_STEREOCHEMISTRY:
+		if atom.GetChiralTag() != Chem.rdchem.ChiralType.CHI_UNSPECIFIED:
+			if '@' not in symbol:
+				# Be explicit when there is a tetrahedral chiral tag
+				if atom.GetChiralTag() == Chem.rdchem.ChiralType.CHI_TETRAHEDRAL_CCW:
+					tag = '@'
+				elif atom.GetChiralTag() == Chem.rdchem.ChiralType.CHI_TETRAHEDRAL_CW:
+					tag = '@@'
+				if ':' in symbol:
+					symbol = symbol.replace(':', ';{}:'.format(tag))
+				else:
+					symbol = symbol.replace(']', ';{}]'.format(tag))
+
+
+	return symbol
+
 def get_fragments_for_changed_atoms(mols, changed_atom_tags, radius = 0, 
 	category = 'reactants', expansion = []):
 	'''Given a list of RDKit mols and a list of changed atom tags, this function
 	computes the SMILES string of molecular fragments using MolFragmentToSmiles 
-	for all changed fragments'''
+	for all changed fragments.
+
+	expansion: atoms added during reactant expansion that should be included and
+	           generalized in product fragment
+	'''
 
 	fragments = ''
 	for mol in mols:
@@ -279,33 +343,7 @@ def get_fragments_for_changed_atoms(mols, changed_atom_tags, radius = 0,
 			if ':' in atom.GetSmarts():
 				if atom.GetSmarts().split(':')[1][:-1] in changed_atom_tags:
 					atoms_to_use.append(atom.GetIdx())
-					symbol = atom.GetSmarts()
-					# CUSTOM SYMBOL CHANGES
-					if atom.GetTotalNumHs() == 0:
-						# Be explicit when there are no hydrogens
-						if ':' in symbol: # stick H0 before label
-							symbol = symbol.replace(':', ';H0:')
-						else: # stick before end
-							symbol = symbol.replace(']', ';H0]')
-						
-						# print('Being explicit about H0!!!!')
-					if atom.GetFormalCharge() == 0:
-						# Also be explicit when there is no charge
-						if ':' in symbol: 
-							symbol = symbol.replace(':', ';+0:')
-						else:
-							symbol = symbol.replace(']', ';+0]')
-					if USE_STEREOCHEMISTRY:
-						if atom.GetChiralTag() != Chem.rdchem.ChiralType.CHI_UNSPECIFIED:
-							# Be explicit when there is a tetrahedral chiral tag
-							if atom.GetChiralTag() == Chem.rdchem.ChiralType.CHI_TETRAHEDRAL_CCW:
-								tag = '@'
-							elif atom.GetChiralTag() == Chem.rdchem.ChiralType.CHI_TETRAHEDRAL_CW:
-								tag = '@@'
-							if ':' in symbol:
-								symbol = symbol.replace(':', ';{}:'.format(tag))
-							else:
-								symbol = symbol.replace(']', ';{}]'.format(tag))
+					symbol = get_strict_smarts_for_atom(atom)
 					if symbol != atom.GetSmarts():
 						symbol_replacements.append((atom.GetIdx(), symbol))
 					continue
@@ -326,9 +364,15 @@ def get_fragments_for_changed_atoms(mols, changed_atom_tags, radius = 0,
 						# Make the expansion a wildcard
 						symbol_replacements.append((atom.GetIdx(), convert_atom_to_wildcard(atom)))	
 						if v: print('expanded label {} to wildcard in products'.format(label))
+			
+			# Make sure unmapped atoms are included (from products)
+			for atom in mol.GetAtoms():
+				if not atom.HasProp('molAtomMapNumber'): 
+					atoms_to_use.append(atom.GetIdx())
+					symbol = get_strict_smarts_for_atom(atom)
+					symbol_replacements.append((atom.GetIdx(), symbol))
 
-		# Define new symbols to replace terminal species with wildcards
-		# (don't want to restrict templates too strictly)
+		# Define new symbols based on symbol_replacements
 		symbols = [atom.GetSmarts() for atom in mol.GetAtoms()]
 		for (i, symbol) in symbol_replacements:
 			symbols[i] = symbol
@@ -340,15 +384,11 @@ def get_fragments_for_changed_atoms(mols, changed_atom_tags, radius = 0,
 		# 		                    [s for (x, s) in symbol_replacements]))
 		# Remove molAtomMapNumber before canonicalization
 		[x.ClearProp('molAtomMapNumber') for x in mol.GetAtoms()]
-		if not USE_CUSTOM_RDKIT:
-			fragments += '(' + AllChem.MolFragmentToSmiles(mol, atoms_to_use, 
-			atomSymbols = symbols, allHsExplicit = True, 
-			isomericSmiles = USE_STEREOCHEMISTRY, allBondsExplicit = True) + ').'
-		else:
-			fragments += '(' + AllChem.MolFragmentToSmiles(mol, atoms_to_use, 
-			atomSymbols = symbols, allHsExplicit = True, 
-			isomericSmiles = USE_STEREOCHEMISTRY, allBondsExplicit = True,
-			ignoreAtomMapping = True) + ').'
+		
+		fragments += '(' + AllChem.MolFragmentToSmiles(mol, atoms_to_use, 
+		atomSymbols = symbols, allHsExplicit = True, 
+		isomericSmiles = USE_STEREOCHEMISTRY, allBondsExplicit = True) + ').'
+		
 	return fragments[:-1]
 
 def expand_changed_atom_tags(changed_atom_tags, reactant_fragments):
@@ -371,22 +411,23 @@ def get_special_groups(mol):
 	be included in a fragment all together. This should only be done for the 
 	reactants, otherwise the products might end up with mapping mismatches'''
 
-	if SUPER_GENERAL_TEMPLATES: return []
-
 	# Define templates, based on Functional_Group_Hierarchy.txt from Greg Laandrum
 	group_templates = [ 
 		'C(=O)Cl', # acid chloride
+		'C(=O)N', # amide
 		'C(=O)[O;H,-]', # carboxylic acid
 		'[$(S-!@[#6])](=O)(=O)(Cl)', # sulfonyl chloride
 		'[$(B-!@[#6])](O)(O)', # boronic acid
 		'[$(N-!@[#6])](=!@C=!@O)', # isocyanate
 		'[N;H0;$(N-[#6]);D2]=[N;D2]=[N;D1]', # azide
-		'O=C1N(Br)C(=O)CC1', # NBS brominating agent
+		'O=C1N([Br,I,F,Cl])C(=O)CC1', # NBS brominating agent
 		'C=O', # carbonyl
 		'ClS(Cl)=O', # thionyl chloride
-		'[Mg][Br]', # grinard (non-disassociated)
+		'[Mg,Li][Br,Cl]', # grinard (non-disassociated)
 		'[#6]S(=O)(=O)[O]', # RSO3 leaving group
 		'[O]S(=O)(=O)[O]', # SO4 group
+		'[N]=[N]=[C]', # diazo-alkyl
+		'C#N', # nitrile
 		]
 
 	# Build list
@@ -395,15 +436,6 @@ def get_special_groups(mol):
 		matches = mol.GetSubstructMatches(Chem.MolFromSmarts(template))
 		groups.extend(list(matches))
 	return groups
-
-def mol_list_to_inchi(mols):
-	'''List of RDKit molecules to InChI string separated by ++'''
-	inchis = [Chem.MolToInchi(mol) for mol in mols]
-	return ' ++ '.join(sorted(inchis))
-
-def mol_list_from_inchi(inchis):
-	'''InChI string separated by ++ to list of RDKit molecules'''
-	return [Chem.MolFromInchi(inchi.strip()) for inchi in inchis.split('++')]
 
 def canonicalize_template(template):
 	'''This function takes one-half of a template SMARTS string 
@@ -470,264 +502,247 @@ def canonicalize_transform(transform):
 	transform_reordered = '>>'.join([canonicalize_template(x) for x in transform.split('>>')])
 	return reassign_atom_mapping(transform_reordered)
 
-def convert_to_retro(transform):
-	'''This function takes a forward synthesis and converts it to a
-	retrosynthesis. Only transforms with a single product are kept, since 
-	retrosyntheses should have a single reactant (and split it up accordingly).'''
-	
-	# Split up original transform
-	reactants = transform.split('>>')[0]
-	products  = transform.split('>>')[1]
 
-	# Don't force products to be from different molecules (?)
-	# -> any reaction template can be intramolecular (might remove later)
-	products = products[1:-1].replace(').(', '.')
-
-	# Don't force the "products" of a retrosynthesis to be two different molecules!
-	reactants = reactants[1:-1].replace(').(', '.')
-
-	return '>>'.join([products, reactants])
-
-def main(N = 15, folder = ''):
-	'''Read reactions from Lowe's patent reaction SMILES'''
+def main(N = 15, skip = 0, skip_id = 0):
+	'''Read reactions'''
 	global v
-	# Open file
 
 	# Define scoring variables
 	total_attempted = 0 # total reactions simulated (excludes skipped)
 	total_correct = 0 # actual products predicted
 	total_precise = 0 # ONLY actual products predicted
+	total_unmapped = 0
+	total_partialmapped = 0
+	total_nonreaction = 0
 
-	N = min([N, example_collection.count()])
+	# N = min([N, REACTION_DB.count({'RX_SKW': 'mapped reaction'})])
 
 	try: # to allow breaking
 		# Look for entries
-		i = -1
-		for example_doc in example_collection.find(no_cursor_timeout=True):
-			i += 1
+		ctr = -1
+		for example_doc in REACTION_DB.find({'RX_SKW': 'mapped reaction'}, no_cursor_timeout=True).sort('_id', 1):
+			ctr += 1
 
+			if example_doc['_id'] < skip_id: continue
+			if ctr < skip: continue 
+
+			# Temporary (skipping already done)
+			#if i < 1512985: continue
+	
 			# Are we done?
-			if i == N:
-				i -= 1
+			if ctr == N:
+				ctr -= 1
 				break
-
-			# if i < 441816: continue
-
-			# KNOWN ISSUES
-			if i > 13700 and i < 13800: continue
-			if i > 23283 and i < 23285: continue
-			if i > 23860 and i < 23863: continue
-			if i > 56778 and i < 56782: continue
-			if i > 87600 and i < 87700: continue
-			if i > 88200 and i < 88300: continue
-			if i > 185000 and i < 185100: continue
 
 			if v: 
 				print('##################################')
 				print('###        RXN {}'.format(i))
 				print('##################################')
 
+			if "nonmapped reaction" in example_doc['RX_SKW']:
+				print('Unmapped reaction {}'.format(example_doc['_id']))
+				total_unmapped += 1
+				continue
+
+			# Check atom mapping
+			try:
+				prod_numatoms = example_doc['PROD_NUMATOMS']
+				frac_prod_mapped = example_doc['FRAC_PROD_MAPPED']
+				unmapped_atoms = prod_numatoms * (1 - frac_prod_mapped)
+				if unmapped_atoms > MAXIMUM_NUMBER_UNMAPPED_PRODUCT_ATOMS: 
+					continue
+			except KeyError as e:
+				continue
+
 			try:
 				# Unpack
-				reaction_smiles = str(example_doc['reaction_smiles'])
+				reaction_smiles = str(example_doc[reaction_smiles_field])
 				reactants, agents, products = [mols_from_smiles_list(x) for x in 
 											[mols.split('.') for mols in reaction_smiles.split('>')]]
+				if None in reactants: continue 
+				if None in products: continue
+				[AllChem.RemoveHs(mol) for mol in reactants + agents + products]
 				[Chem.SanitizeMol(mol) for mol in reactants + agents + products]
-			except:
+			except Exception as e:
 				# can't sanitize -> skip
+				print(e)
+				print('Could not load SMILES or sanitize')
+				print('ID: {}'.format(example_doc['_id']))
 				continue
-
-
-			# Get unique InChi for products we are looking for
-			# remove cases where product shows up
-			product_inchis_split = mol_list_to_inchi(products).split(' ++ ')
-			for reactant in reactants:
-				reactant_inchi = mol_list_to_inchi([reactant])
-				if reactant_inchi in product_inchis_split:
-					product_inchis_split.remove(reactant_inchi)
-			product_inchis = ' ++ '.join(product_inchis_split)
-
-			if v: print(reaction_smiles)
-			if None in reactants + agents + products or not product_inchis: 
-				if v: 
-					print(reaction_smiles)
-					print('Could not parse all molecules in reaction, skipping')
-					#raw_input('Enter anything to continue...')
-				continue
-
-			# Calculate changed atoms
-			changed_atoms, changed_atom_tags, err = get_changed_atoms(reactants, products)
-			if err: 
-				if v: print('skipping')
-				continue
-
-			# Get fragments for reactants
-			reactant_fragments = get_fragments_for_changed_atoms(reactants, changed_atom_tags, 
-				radius = 1, expansion = [], category = 'reactants')
-			# Get fragments for products 
-			# (WITHOUT matching groups but WITH the addition of reactant fragments)
-			product_fragments  = get_fragments_for_changed_atoms(products, changed_atom_tags, 
-				radius = 0, expansion = expand_changed_atom_tags(changed_atom_tags, reactant_fragments),
-				category = 'products')
-
-			# Report transform
-			rxn_string = '{}>>{}'.format(reactant_fragments, product_fragments)
-			if v: print('\nOverall fragment transform: {}'.format(rxn_string))
-
-			# Load into RDKit
-			rxn = AllChem.ReactionFromSmarts(rxn_string)
-			if rxn.Validate()[1] != 0: continue
-			# print('here')
-
-			# # Analyze
-			# if v: 
-			# 	print('Original number of reactants: {}'.format(len(reactants)))
-			# 	print('Number of reactants in transform: {}'.format(rxn.GetNumReactantTemplates()))
-
-			# Run reaction
+			
 			try:
-				correct = False
-				if not DO_NOT_TEST:
-					# Try all combinations of reactants that fit template
-					combinations = itertools.combinations(reactants, rxn.GetNumReactantTemplates())
-					unique_product_sets = []
-					for combination in combinations:
-						outcomes = rxn.RunReactants(list(combination))
-						if not outcomes: continue
-						#if v: print('\nFor reactants {}'.format([Chem.MolToSmiles(mol) for mol in combination]))
-						for j, outcome in enumerate(outcomes):
-							#if v: print('- outcome {}/{}'.format(j + 1, len(outcomes)))
-							for k, product in enumerate(outcome):
-								if v: print('~~prod: {}'.format(Chem.MolToSmiles(product)))
-								try:
-									Chem.SanitizeMol(product)
-									product.UpdatePropertyCache()
-								except Exception as e:
-									print('warning: {}'.format(e))
-								if v: 
-									#print('  - product {}: {}'.format(k, Chem.MolToSmiles(product, isomericSmiles = True)))
-									try:
-										pass
-										#product = Chem.MolFromSmiles(Chem.MolToSmiles(product, isomericSmiles = True))
-										# Draw.MolToFile(product, '{}/rxn_{}/outcome_{}_product_{}.png'.format(folder, i, j, k), size=(250,250))
-									except Exception as e:
-										print('warning: could not draw {}: {}'.format(Chem.MolToSmiles(product, isomericSmiles = USE_STEREOCHEMISTRY), e))
+				###
+				### Check product atom mapping to see if reagent contributes
+				###
 
-							# Remove untransformed products
-							product_set_split = mol_list_to_inchi(outcome).split(' ++ ')
-							for reactant in reactants:
-								reactant_inchi = mol_list_to_inchi([reactant])
-								if reactant_inchi in product_set_split:
-									product_set_split.remove(reactant_inchi)
-							product_set = ' ++ '.join(product_set_split)
+				are_unmapped_product_atoms = False
+				extra_reactant_fragment = ''
+				for product in products:
+					if sum([a.HasProp('molAtomMapNumber') for a in product.GetAtoms()]) < len(product.GetAtoms()):
+						if v: print('Not all product atoms have atom mapping')
+						if v: print('ID: {}'.format(example_doc['_id']))
+						if v: print('REACTION: {}'.format(example_doc['RXN_SMILES']))
+						are_unmapped_product_atoms = True
+				if are_unmapped_product_atoms: # add fragment to template
 
-							if product_set not in unique_product_sets:
-								unique_product_sets.append(product_set)
+					total_partialmapped += 1
+					for product in products:
+						# Get unmapped atoms
+						unmapped_ids = [
+							a.GetIdx() for a in product.GetAtoms() if not a.HasProp('molAtomMapNumber')
+						]
+						# Define new atom symbols for fragment with atom maps, generalizing fully
+						atom_symbols = ['[{}]'.format(a.GetSymbol()) for a in product.GetAtoms()]
+						# And bond symbols...
+						bond_symbols = ['~' for b in product.GetBonds()]
+						if unmapped_ids:
+							extra_reactant_fragment += \
+								AllChem.MolFragmentToSmiles(product, unmapped_ids, 
+								allHsExplicit = False, isomericSmiles = USE_STEREOCHEMISTRY, 
+								atomSymbols = atom_symbols, bondSymbols = bond_symbols) + '.'
+					if extra_reactant_fragment:
+						extra_reactant_fragment = extra_reactant_fragment[:-1]
+						if v: print('    extra reactant fragment: {}'.format(extra_reactant_fragment))
 
-					if v: 
-						print('\nExpctd {}'.format(product_inchis))
-						for product_set in unique_product_sets:
-							print('Found  {}'.format(product_set))
+					# Consolidate repeated fragments (stoichometry)
+					extra_reactant_fragment = '.'.join(sorted(list(set(extra_reactant_fragment.split('.')))))
+					#fragmatch = Chem.MolFromSmarts(extra_reactant_fragment) # no parentheses
 
-					if product_inchis in unique_product_sets:
-						if v: print('\nSuccessfully found true products!')
-						correct = True
-						total_correct += 1
-						if len(unique_product_sets) > 1:
-							if v: print('...but also found {} more'.format(len(unique_product_sets) - 1))
-						else:
-							total_precise += 1
-					else:
-						if v: print('\nDid not find true products')
-						if len(unique_product_sets) > 1:
-							if v: print('...but found {} unexpected ones'.format(len(unique_product_sets)))
-						if v: 
-							img = TransformStringToImage(rxn_string)
-							img.save('test/transform_rxns/{}.png'.format(i))
-							img = ReactionStringToImage(reaction_smiles, strip = False)
-							img.save('test/transform_rxns/{}_rxn.png'.format(i))
-							with open('test/transform_rxns/{}_tform.txt'.format(i), 'w') as tform_fid:
-								tform_fid.write(rxn_string)
-							with open('test/transform_rxns/{}_rxn.txt'.format(i), 'w') as tform_fid:
-								tform_fid.write(reaction_smiles)
-					
-				if correct or DO_NOT_TEST:	
-					# Valid reaction!
-					rxn_canonical = canonicalize_transform(rxn_string)
-					retro_canonical = convert_to_retro(rxn_canonical)
+				###
+				### Do RX-level processing
+				###  
 
-					# # DEBUG
-					# if retro_canonical == '[*:2]-[OH;+0:1]>>[C]-[O;H0;+0:1]-[*:2]' or \
-					# 		retro_canonical == '[OH;+0:1]-[*:2]>>[C]-[O;H0;+0:1]-[*:2]':
-					# 	print(retro_canonical)
-					# 	raw_input('Pausing...')
-					# print(retro_canonical)
-					# continue
 
-					# Is this old?
-					doc = template_collection.find_one({'reaction_smarts': retro_canonical})
+				if v: print(reaction_smiles)
+				if None in reactants + products:
+					print('Could not parse all molecules in reaction, skipping')
+					print('ID: {}'.format(example_doc['_id']))
+					continue
 
-					if doc:
-						# Old
-						template_collection.update_one(
-							{'_id': doc['_id']},
-							{
-								'$inc': {
-									'count': 1,
-								},
-								'$addToSet': {
-									'references': example_doc['_id'],
-								},
-							}
-						)
-					else:
-						# New
-						result = template_collection.insert_one(
-							{
-								'name': '',
-								'reaction_smarts': retro_canonical,
-								'rxn_example': reaction_smiles,
-								'references': [example_doc['_id']],
-								'explicit_H': False,
-								'count': 1,
-							}
-						)
-						#print('Created database entry {}'.format(result.inserted_id))
+				# Calculate changed atoms
+				changed_atoms, changed_atom_tags, err = get_changed_atoms(reactants, products)
+				if err: 
+					print('Could not get changed atoms')
+					print('ID: {}'.format(example_doc['_id']))
+					continue
+				if not changed_atom_tags:
+					print('No atoms changed? (stereochemistry only?)')
+					print('ID: {}'.format(example_doc['_id']))
+					# print('Reaction SMILES: {}'.format(example_doc['RXN_SMILES']))
+					continue
+
+				# Get fragments for reactants
+				reactant_fragments = get_fragments_for_changed_atoms(reactants, changed_atom_tags, 
+					radius = 1, expansion = [], category = 'reactants')
+				# Get fragments for products 
+				# (WITHOUT matching groups but WITH the addition of reactant fragments)
+				product_fragments  = get_fragments_for_changed_atoms(products, changed_atom_tags, 
+					radius = 0, expansion = expand_changed_atom_tags(changed_atom_tags, reactant_fragments),
+					category = 'products')
+
+
+				###
+				### Put together and canonicalize (as best as possible)
+				###
+				rxn_string = '{}>>{}'.format(reactant_fragments, product_fragments)
+				rxn_canonical = canonicalize_transform(rxn_string)
+				# print('Pre-resplit: {}'.format(rxn_canonical))
+				# Change from inter-molecular to whatever-molecular
+				rxn_canonical_split = rxn_canonical.split('>>')
+				rxn_canonical = rxn_canonical_split[0][1:-1].replace(').(', '.') + \
+					'>>' + rxn_canonical_split[1][1:-1].replace(').(', '.')
+				
+				reactants_string = rxn_canonical.split('>>')[0]
+				products_string  = rxn_canonical.split('>>')[1]
+
+				retro_canonical = products_string + '>>' + reactants_string
+
+				# print('Original string: {}'.format(example_doc['RXN_SMILES']))
+				# print('\nOverall retro transform: {}'.format(retro_canonical))
+				# print('Extra necessary fragment: {}'.format(extra_reactant_fragment))
+
+				# Load into RDKit
+				rxn = AllChem.ReactionFromSmarts(retro_canonical)
+				if rxn.Validate()[1] != 0: 
+					print('Could not validate reaction successfully')
+					print('ID: {}'.format(example_doc['_id']))
+					print('retro_canonical: {}'.format(retro_canonical))
+					print('original: {}'.format(example_doc['RXN_SMILES']))
+					if v: raw_input('Pausing...')
+					continue
+
+				###
+				### Now look for specific RXDs.
+				###
+				rxd_id_list = ['{}-{}'.format(example_doc['_id'], j) for j in range(1, int(example_doc['RX_NVAR']) + 1)]
+				# All RXDs will have the same template - they'll just need different
+				# references and contribute to the count differently
+
+				# Insert - if it doesn't exist, Mongo will create the document
+				# $inc, $addToSet, and $setOnInsert are necessary!
+				TRANSFORM_DB.update_one(
+					{'reaction_smarts': retro_canonical},
+					{
+
+						'$inc': {
+							'count': len(rxd_id_list),
+						},
+						'$addToSet': {
+							'references': { '$each': rxd_id_list }
+						},
+						'$setOnInsert': {
+							'reaction_smarts': retro_canonical,
+							'necessary_reagent': extra_reactant_fragment,
+							'rxn_example': reaction_smiles,
+						}
+					},
+					True # upsert
+				)
+				if v: print('Added record for template {}'.format(retro_canonical))
 
 				total_attempted += 1
 			
+
+			except KeyboardInterrupt:
+				print('Interrupted')
+				raise KeyboardInterrupt
+
 			except Exception as e:
+				print(e)
 				if v: 
-					print(e)
 					print('skipping')
 					#raw_input('Enter anything to continue')
 				continue
 
 
 			# Report progress
-			if (i % 100) == 0:
-				print('{}/{}'.format(i, N))
-				with open('populated_up_to.txt', 'a') as fid:
-					fid.write('i = {}\n'.format(i))
+			if (ctr % 100) == 0:
+				print('{}/{}'.format(ctr, N))
 
 			# Pause
-			#if v: raw_input('Enter anything to continue...')
+			if v: raw_input('Enter anything to continue...')
 
 	except KeyboardInterrupt:
 		print('Stopped early!')		
-	except Exception as e:
-		print(e)
+	# except Exception as e:
+	# 	print(e)
 
-	total_examples = i + 1
-	print('...finished looking through {} reaction records'.format(min([N, i + 1])))
+	total_examples = ctr + 1
+	print('...finished looking through {} reaction records'.format(min([N, ctr])))
 
+	print('Unmapped reactions in {}/{} ({}%) cases'.format(total_unmapped,
+		total_examples, total_unmapped * 100.0 / total_examples))
+	print('Partially-mapped reactions in {}/{} ({}%) cases'.format(total_partialmapped,
+		total_examples, total_partialmapped * 100.0 / total_examples))
+	print('Non-reactions (stereochem only?) in {}/{} ({}%) cases'.format(total_nonreaction,
+		total_examples, total_nonreaction * 100.0 / total_examples))
 	print('Error-free parsing in {}/{} ({}%) cases'.format(total_attempted, 
 		total_examples, total_attempted * 100.0 / total_examples))
 	print('Correct product predictions in {}/{} ({}%) cases'.format(total_correct, 
 		total_examples, total_correct * 100.0 / total_examples))
 	print('Specific product predictions in {}/{} ({}%) cases'.format(total_precise, 
 		total_examples, total_precise * 100.0 / total_examples))
-	print('Created {} database entries'.format(template_collection.find().count()))
+	print('Created {} database entries'.format(TRANSFORM_DB.find().count()))
 
 	return True
 
@@ -737,29 +752,23 @@ if __name__ == '__main__':
 	parser = argparse.ArgumentParser()
 	parser.add_argument('-v', type = bool, default = False,
 						help = 'Verbose printing (incl. saving images); defaults to False')
-	parser.add_argument('-o', '--out', type = str, default = '',
-						help = 'Folder to output images to if verbose')
 	parser.add_argument('-n', '--num', type = int, default = 50,
 						help = 'Maximum number of records to examine; defaults to 50')
-	parser.add_argument('-g', '--general', type = bool, default = True,
-						help = 'Use incredibly general templates; defaults to True\n' + 
-						'Only appropriate for forward enumeration')
-	parser.add_argument('-t', '--test', type = bool, default = True,
-						help = 'Whether to *skip* testing; defaults to True')
-	parser.add_argument('--custom_rdkit', type = bool, default = False,
-						help = 'Whether using versino of rdkit with ignoreAtomMapping; defaults to False')
+	parser.add_argument('--skip', type = int, default = 0,
+						help = 'Number of examples to skip, defaults 0')
+	parser.add_argument('--skip_id', type = int, default = 0, 
+						help = 'IDs of reaction entries to skip to, defaults 0')
 	args = parser.parse_args()
 
 	v = args.v
 	lg = RDLogger.logger()
 	if not v: lg.setLevel(4)
-	SUPER_GENERAL_TEMPLATES = bool(args.general)
-	DO_NOT_TEST = bool(args.test)
-	USE_CUSTOM_RDKIT = bool(args.custom_rdkit)
 
-	clear = raw_input('Do you want to clear the {} existing templates in {}? '.format(template_collection.find().count(), template_collection_name))
+	clear = raw_input('Do you want to clear the {} existing templates? '.format(TRANSFORM_DB.find().count()))
 	if clear in ['y', 'Y', 'yes', '1', 'Yes']:
-		result = template_collection.delete_many({})
+		result = TRANSFORM_DB.delete_many({})
 		print('Cleared {} entries from collection'.format(result.deleted_count))
+	TRANSFORM_DB.create_index([('reaction_smarts', 'hashed')])
+	print('Added hashed index on reaction_smarts')
 
-	main(N = args.num, folder = args.out)
+	main(N = args.num, skip = args.skip, skip_id = args.skip_id)

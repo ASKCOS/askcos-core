@@ -3,8 +3,20 @@ This script (generate_reaction_templates) uses a MongoDB collection
 with atom-mapped reaction SMILES strings and parses them into a new 
 collection containing the transforms.
 
-This is intended to be used with the Patent database. In the database,
-all product atoms must be fully atom mapped
+This is intended to be used with the Reaxys database. In the database,
+reagents can contribute atoms to the products. This means that those
+atoms are not mapped in the RXN_SMILES field. The script currently
+leaves those atoms OUT of the template.
+
+As an example, halogenation might be performed using [Cl][Cl] as a
+chlorinating agent, so the chlorine atom in the product will be 
+unmapped. This script will create a retrosynthetic template that does
+not included a specific precursor containing a Cl atom. Instead, an
+extra field is added to the template document indicating that there 
+is a necessary_reagent fragment (as a generalized SMARTS string).
+
+Additionally, in the cases of unmapped product atoms, those atoms are
+FULLY specified in the product fragment
 
 v4 uses a parallel worker pool with a generator that queues up 10,000
      reactions at a time
@@ -25,15 +37,22 @@ v5 chiral - handles stereochemistry (to some extent at least...)
     stereochemistry and are adjacent to structural changes
 
 v6 chiral - adds some more special groups
-v7 chiral - also adds some groups
+
+...
+
+v9 - more special groups, filter by maximum number of product atoms, filter
+    by minimum publication year, check if dimerization or intramolecular only
+    Also, includes all unmapped atoms from reactants (fully specifies LGs)
 '''
 
 from __future__ import print_function
+USE_STEREOCHEMISTRY = True
 import argparse
 from numpy.random import shuffle # for random selection
 import rdkit.Chem as Chem          # molecule building
 from rdkit.Chem import AllChem
 from collections import defaultdict
+import rdkit.Chem.Draw as Draw
 from rdkit import RDLogger
 import datetime # for info files
 import json # for dumping
@@ -41,18 +60,22 @@ import sys  # for commanad line
 import os   # for file paths
 import re 
 import itertools
+from makeit.retro.draw import *
 from tqdm import tqdm 
 
 
 # DATABASE
 from pymongo import MongoClient    # mongodb plugin
-client = MongoClient('mongodb://guest:guest@rmg.mit.edu/admin', 27017)
-db = client['uspto']
-TRANSFORM_DB = db['transforms_retro_v2_allunmapped']
+client = MongoClient('mongodb://guest:guest@rmg.mit.edu/admin', 27017, connect=False)
+db = client['reaxys_v2']
+TRANSFORM_DB = db['transforms_retro_v9']
 REACTION_DB = db['reactions']
-v = False
-USE_STEREOCHEMISTRY = True 
+INSTANCE_DB = db['instances']
+CHEMICAL_DB = db['chemicals']
+MAXIMUM_NUMBER_UNMAPPED_PRODUCT_ATOMS = 5
+MINIMUM_MAXPUB_YEAR = 1940
 INCLUDE_ALL_UNMAPPED_REACTANT_ATOMS = True
+v = False
 
 def mols_from_smiles_list(all_smiles):
     '''Given a list of smiles strings, this function creates rdkit
@@ -757,21 +780,32 @@ def canonicalize_transform(transform):
     transform_reordered = '>>'.join([canonicalize_template(x) for x in transform.split('>>')])
     return reassign_atom_mapping(transform_reordered)
 
-def process_an_example_line(line, test=False):
+def process_an_example_doc(example_doc, test=False):
     '''Function for a worker to process one doc'''
-    
-    reaction_smiles = line.split('\t')[0]
-    patent_num = line.split('\t')[1]
+    total_partialmapped = 0
+    total_attempted = 0
+    total_unmapped = 0
+
+
+    if v: 
+        print('##################################')
+        print('###        RXN {}'.format(example_doc['_id']))
+        print('##################################')
+
+    if "nonmapped reaction" in example_doc['RX_SKW']:
+        print('Unmapped reaction {}'.format(example_doc['_id']))
+        total_unmapped += 1
+        return
 
     try:
         # Unpack
-        reaction_smiles = str(reaction_smiles)
+        reaction_smiles = str(example_doc['RXN_SMILES'])
         if '[2H]' in reaction_smiles:
             # stupid, specific deuterated case makes RemoveHs not remove 2Hs
             reaction_smiles = re.sub('\[2H\]', r'[H]', reaction_smiles)
 
-        reactants = mols_from_smiles_list(reaction_smiles.split('>')[0].split('.'))
-        products = mols_from_smiles_list(reaction_smiles.split('>')[-1].split('.'))
+        reactants = mols_from_smiles_list(reaction_smiles.split('>>')[0].split('.'))
+        products = mols_from_smiles_list(reaction_smiles.split('>>')[1].split('.'))
         if None in reactants: return 
         if None in products: return
         for i in range(len(reactants)):
@@ -784,126 +818,253 @@ def process_an_example_line(line, test=False):
         # can't sanitize -> skip
         print(e)
         print('Could not load SMILES or sanitize')
+        print('ID: {}'.format(example_doc['_id']))
         return
 
-    if None in reactants + products:
-        print('Could not parse all molecules in reaction, skipping')
-        return
-
-    # Calculate changed atoms
-    changed_atoms, changed_atom_tags, err = get_changed_atoms(reactants, products)
-    if err: 
-        if v:
-            print('Could not get changed atoms')
-        return
-    if not changed_atom_tags:
-        if v:
-            print('No atoms changed?')
-        return
+    # # Get rid of products without atom mapping
+    # new_products = []
+    # for product in products:
+    #     keep = False
+    #     for atom in product.GetAtoms():
+    #         if atom.HasProp('molAtomMapNumber'):
+    #             keep = True 
+    #             break
+    #     if keep:
+    #         new_products.append(product)
+    # products = new_products
+    # if len(products) > 1:
+    #     print('Skipping multi-product entry')
+    #     if v: 
+    #         print(reaction_smiles.split('>>')[1])
+    #     return
 
     try:
-        # Get fragments for reactants
-        reactant_fragments, intra_only, dimer_only = get_fragments_for_changed_atoms(reactants, changed_atom_tags, 
-            radius = 1, expansion = [], category = 'reactants')
-        # Get fragments for products 
-        # (WITHOUT matching groups but WITH the addition of reactant fragments)
-        product_fragments, _, _  = get_fragments_for_changed_atoms(products, changed_atom_tags, 
-            radius = 0, expansion = expand_changed_atom_tags(changed_atom_tags, reactant_fragments),
-            category = 'products')
-    except Exception as e:
-        if v:
-            print(e)
-            print(reaction_smiles)
-        return
+        ###
+        ### Check product atom mapping to see if reagent contributes
+        ###
 
-    ###
-    ### Put together and canonicalize (as best as possible)
-    ###
-    rxn_string = '{}>>{}'.format(reactant_fragments, product_fragments)
-    rxn_canonical = canonicalize_transform(rxn_string)
-    # print('Pre-resplit: {}'.format(rxn_canonical))
-    # Change from inter-molecular to whatever-molecular
-    rxn_canonical_split = rxn_canonical.split('>>')
-    rxn_canonical = rxn_canonical_split[0][1:-1].replace(').(', '.') + \
-        '>>' + rxn_canonical_split[1][1:-1].replace(').(', '.')
-    
-    reactants_string = rxn_canonical.split('>>')[0]
-    products_string  = rxn_canonical.split('>>')[1]
+        are_unmapped_product_atoms = False
+        extra_reactant_fragment = ''
+        for product in products:
+            if sum([a.HasProp('molAtomMapNumber') for a in product.GetAtoms()]) < len(product.GetAtoms()):
+                if v: print('Not all product atoms have atom mapping')
+                if v: print('ID: {}'.format(example_doc['_id']))
+                if v: print('REACTION: {}'.format(example_doc['RXN_SMILES']))
+                are_unmapped_product_atoms = True
+        if are_unmapped_product_atoms: # add fragment to template
 
-    retro_canonical = products_string + '>>' + reactants_string
+            total_partialmapped += 1
+            for product in products:
+                # Get unmapped atoms
+                unmapped_ids = [
+                    a.GetIdx() for a in product.GetAtoms() if not a.HasProp('molAtomMapNumber')
+                ]
+                if len(unmapped_ids) > MAXIMUM_NUMBER_UNMAPPED_PRODUCT_ATOMS:
+                    # Skip this example - too many unmapped!
+                    return
+                # Define new atom symbols for fragment with atom maps, generalizing fully
+                atom_symbols = ['[{}]'.format(a.GetSymbol()) for a in product.GetAtoms()]
+                # And bond symbols...
+                bond_symbols = ['~' for b in product.GetBonds()]
+                if unmapped_ids:
+                    extra_reactant_fragment += \
+                        AllChem.MolFragmentToSmiles(product, unmapped_ids, 
+                        allHsExplicit = False, isomericSmiles = USE_STEREOCHEMISTRY, 
+                        atomSymbols = atom_symbols, bondSymbols = bond_symbols) + '.'
+            if extra_reactant_fragment:
+                extra_reactant_fragment = extra_reactant_fragment[:-1]
+                if v: print('    extra reactant fragment: {}'.format(extra_reactant_fragment))
 
-    # Load into RDKit
-    rxn = AllChem.ReactionFromSmarts(retro_canonical)
-    if rxn.Validate()[1] != 0: 
-        print('Could not validate reaction successfully')
+            # Consolidate repeated fragments (stoichometry)
+            extra_reactant_fragment = '.'.join(sorted(list(set(extra_reactant_fragment.split('.')))))
+            #fragmatch = Chem.MolFromSmarts(extra_reactant_fragment) # no parentheses
+
+        ###
+        ### Do RX-level processing
+        ###  
+
+
+        if v: print(reaction_smiles)
+        if None in reactants + products:
+            print('Could not parse all molecules in reaction, skipping')
+            print('ID: {}'.format(example_doc['_id']))
+            return
+
+        # Calculate changed atoms
+        changed_atoms, changed_atom_tags, err = get_changed_atoms(reactants, products)
+        if err: 
+            if v:
+                print('Could not get changed atoms')
+                print('ID: {}'.format(example_doc['_id']))
+            return
+        if not changed_atom_tags:
+            if v:
+                print('No atoms changed?')
+                print('ID: {}'.format(example_doc['_id']))
+            # print('Reaction SMILES: {}'.format(example_doc['RXN_SMILES']))
+            return
+
+        try:
+            # Get fragments for reactants
+            reactant_fragments, intra_only, dimer_only = get_fragments_for_changed_atoms(reactants, changed_atom_tags, 
+                radius = 1, expansion = [], category = 'reactants')
+            # Get fragments for products 
+            # (WITHOUT matching groups but WITH the addition of reactant fragments)
+            product_fragments, _, _  = get_fragments_for_changed_atoms(products, changed_atom_tags, 
+                radius = 0, expansion = expand_changed_atom_tags(changed_atom_tags, reactant_fragments),
+                category = 'products')
+        except ValueError as e:
+            if v:
+                print(e)
+                print(reaction_smiles)
+            return
+
+        ###
+        ### Put together and canonicalize (as best as possible)
+        ###
+        rxn_string = '{}>>{}'.format(reactant_fragments, product_fragments)
+        rxn_canonical = canonicalize_transform(rxn_string)
+        # print('Pre-resplit: {}'.format(rxn_canonical))
+        # Change from inter-molecular to whatever-molecular
+        rxn_canonical_split = rxn_canonical.split('>>')
+        rxn_canonical = rxn_canonical_split[0][1:-1].replace(').(', '.') + \
+            '>>' + rxn_canonical_split[1][1:-1].replace(').(', '.')
         
-        if v: 
-            print('retro_canonical: {}'.format(retro_canonical))
-            print('original: {}'.format(reaction_smiles))
-        return
+        reactants_string = rxn_canonical.split('>>')[0]
+        products_string  = rxn_canonical.split('>>')[1]
 
-    # Insert - if it doesn't exist, Mongo will create the document
-    # $inc, $addToSet, and $setOnInsert are necessary!
-    if test:
-        return retro_canonical
-    else:
-        TRANSFORM_DB.update_one(
-            {'reaction_smarts': retro_canonical,
-             'intra_only': intra_only,
-             'dimer_only': dimer_only},
-            {
-                '$inc': {
-                    'count': 1,
+        retro_canonical = products_string + '>>' + reactants_string
+
+        # print('Original string: {}'.format(example_doc['RXN_SMILES']))
+        # print('\nOverall retro transform: {}'.format(retro_canonical))
+        # print('Extra necessary fragment: {}'.format(extra_reactant_fragment))
+
+        # Load into RDKit
+        rxn = AllChem.ReactionFromSmarts(retro_canonical)
+        if rxn.Validate()[1] != 0: 
+            print('Could not validate reaction successfully')
+            print('ID: {}'.format(example_doc['_id']))
+            print('retro_canonical: {}'.format(retro_canonical))
+            print('original: {}'.format(example_doc['RXN_SMILES']))
+            if v: raw_input('Pausing...')
+            return
+
+        ###
+        ### Now look for specific RXDs.
+        ###
+        rxd_id_list_raw = ['{}-{}'.format(example_doc['_id'], j) for j in range(1, int(example_doc['RX_NVAR']) + 1)]
+        # All RXDs will have the same template - they'll just need different
+        # references and contribute to the count differently
+
+        #...need to validate! (new in v5)
+        rxd_id_list = []
+        for rxd_id in rxd_id_list_raw:
+            instance_doc = INSTANCE_DB.find_one({'_id': rxd_id}, ['RXD_STG', 'RXD_STP'])
+            if not instance_doc:
+                # print('skipping a rxd_id that could not be found')
+                continue
+            # if instance_doc['RXD_STG'] != -1:
+            #     # print('skipped a multistage reaction ref')
+            #     continue 
+            if instance_doc['RXD_STP'] != ['1']:
+                # print('skipped a multistep reaction')
+                continue
+            rxd_id_list.append(rxd_id)
+        if len(rxd_id_list) == 0:
+            # No good references!
+            print('ID {} had no valid rxd refs (all multistep)'.format(example_doc['_id']))
+            return
+
+        # Insert - if it doesn't exist, Mongo will create the document
+        # $inc, $addToSet, and $setOnInsert are necessary!
+        if test:
+            return retro_canonical
+        else:
+            TRANSFORM_DB.update_one(
+                {'reaction_smarts': retro_canonical,
+                 'intra_only': intra_only,
+                 'dimer_only': dimer_only},
+                {
+                    '$inc': {
+                        'count': len(rxd_id_list),
+                    },
+                    '$addToSet': {
+                        'references': { '$each': rxd_id_list }
+                    },
+                    '$setOnInsert': {
+                        'reaction_smarts': retro_canonical,
+                        'necessary_reagent': extra_reactant_fragment,
+                        'rxn_example': reaction_smiles,
+                        'intra_only': intra_only,
+                        'dimer_only': dimer_only,
+                    }
                 },
-                '$addToSet': {
-                    'references': patent_num,
-                },
-                '$setOnInsert': {
-                    'reaction_smarts': retro_canonical,
-                    'rxn_example': reaction_smiles,
-                    'intra_only': intra_only,
-                    'dimer_only': dimer_only,
-                }
-            },
-            True # upsert
-        )
-    if v: print('Added record for template {}'.format(retro_canonical))
+                True # upsert
+            )
+        if v: print('Added record for template {}'.format(retro_canonical))
+
+        total_attempted += 1
     
 
-def main(N=15, skip=0):
+    except KeyboardInterrupt:
+        print('Interrupted')
+        raise KeyboardInterrupt
+
+    except Exception as e:
+        print(e)
+        if v: 
+            print('skipping')
+            #raw_input('Enter anything to continue')
+        return
+
+
+def main(N = 15, skip = 0, skip_id = 0):
     '''Read reactions'''
     global v
+
+    # Define scoring variables
+    total_attempted = 0 # total reactions simulated (excludes skipped)
+    total_correct = 0 # actual products predicted
+    total_precise = 0 # ONLY actual products predicted
+    total_unmapped = 0
+    total_partialmapped = 0
+    total_nonreaction = 0
+
+    # N = min([N, REACTION_DB.count({'RX_SKW': 'mapped reaction'})])
 
     def data_generator():
         data_generator.ctr = -1
         try: # to allow breaking
             # Look for entries
-            for fpath in ['/data/USPTO/2001_Sep2016_USPTOapplications_smiles.rsmi',
-                      '/data/USPTO/1976_Sep2016_USPTOgrants_smiles.rsmi']:
-                
-                print('PROCESSING {}'.format(fpath))
-                
-                with open(fpath, 'r') as fid:
-                    firstline = True
+            for example_doc in REACTION_DB.find(
+                {'_id': {'$gt': skip_id}, 
+                 'RX_SKW': 'mapped reaction',
+                 'RXN_SMILES': {'$exists': True},
+                 'RX_MAXPUB': {'$ne': -1}},
+                ['_id', 'RX_SKW', 'RXN_SMILES', 'RX_MAXPUB', 'RX_NVAR'],
+                no_cursor_timeout=True).sort('_id', 1)[skip:]:
+                data_generator.ctr += 1
 
-                    for line in fid:
-                        if firstline:
-                            firstline = False 
-                            continue
-                    
-                        data_generator.ctr += 1
-                        if data_generator.ctr < skip:
-                            continue
+                if data_generator.ctr % 1000 == 0:
+                    print('count: {}'.format(data_generator.ctr))
+                    print('id: {}'.format(example_doc['_id']))
 
-                        if data_generator.ctr % 1000 == 0:
-                            print('count: {}'.format(data_generator.ctr))
+                if example_doc['_id'] < skip_id: 
+                    continue
+                # if data_generator.ctr < skip: continue 
 
-                        # Are we done?
-                        if data_generator.ctr >= N:
-                            data_generator.ctr -= 1
-                            break
+                # Impose constraint on max publication year
+                # if example_doc['RX_MAXPUB'] == -1: # now in query
+                #     continue
+                if int(example_doc['RX_MAXPUB'][0]) < MINIMUM_MAXPUB_YEAR:
+                    continue
+        
+                # Are we done?
+                if data_generator.ctr >= N:
+                    data_generator.ctr -= 1
+                    break
 
-                        yield line
+                yield example_doc
 
         except KeyboardInterrupt:
             print('Stopped early!')  
@@ -911,12 +1072,39 @@ def main(N=15, skip=0):
     
     generator = data_generator()
     from joblib import Parallel, delayed
-    res = Parallel(n_jobs=12, verbose=5, pre_dispatch=500)(delayed(process_an_example_line)(data) for data in generator)
-    
+    res = Parallel(n_jobs=12, verbose=5, pre_dispatch=500)(delayed(process_an_example_doc)(data) for data in generator)
+    # from multiprocessing import Pool 
+    # pool = Pool(10)
+    # while True:
+    #     print('Queueing up 1000 more examples from generator')
+    #     res = pool.map(process_an_example_doc, itertools.islice(generator, 1000))
+    #     if res:
+    #         pass
+    #     else:
+    #         break
+    # pool.close()
+    # pool.join()
+
+    # except Exception as e:
+    #   print(e)
 
     total_examples = data_generator.ctr + 1
     print('...finished looking through {} reaction records'.format(min([N, total_examples])))
-    print('{} total templates'.format(TRANSFORM_DB.count()))
+
+    print('Unmapped reactions in {}/{} ({}%) cases'.format(total_unmapped,
+        total_examples, total_unmapped * 100.0 / total_examples))
+    print('Partially-mapped reactions in {}/{} ({}%) cases'.format(total_partialmapped,
+        total_examples, total_partialmapped * 100.0 / total_examples))
+    print('Non-reactions (stereochem only?) in {}/{} ({}%) cases'.format(total_nonreaction,
+        total_examples, total_nonreaction * 100.0 / total_examples))
+    print('Error-free parsing in {}/{} ({}%) cases'.format(total_attempted, 
+        total_examples, total_attempted * 100.0 / total_examples))
+    print('Correct product predictions in {}/{} ({}%) cases'.format(total_correct, 
+        total_examples, total_correct * 100.0 / total_examples))
+    print('Specific product predictions in {}/{} ({}%) cases'.format(total_precise, 
+        total_examples, total_precise * 100.0 / total_examples))
+    print('Created {} database entries'.format(TRANSFORM_DB.find().count()))
+
     return True
 
 
@@ -924,22 +1112,29 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument('-v', type = bool, default = False,
-                        help = 'Verbose printing (incl. saving images); defaults to False')
+                        help = 'Verbose printing; defaults to False')
     parser.add_argument('-n', '--num', type = int, default = 50,
                         help = 'Maximum number of records to examine; defaults to 50')
     parser.add_argument('--skip', type = int, default = 0,
                         help = 'Number of examples to skip, defaults 0')
+    parser.add_argument('--skip_id', type = int, default = 0, 
+                        help = 'IDs of reaction entries to skip to, defaults 0')
     args = parser.parse_args()
 
     v = args.v
     lg = RDLogger.logger()
     if not v: lg.setLevel(4)
 
-    clear = raw_input('Do you want to clear the {} existing templates? '.format(TRANSFORM_DB.count()))
+    clear = raw_input('Do you want to clear the {} existing templates? '.format(TRANSFORM_DB.find().count()))
     if clear in ['y', 'Y', 'yes', '1', 'Yes']:
         result = TRANSFORM_DB.delete_many({})
         print('Cleared {} entries from collection'.format(result.deleted_count))
     TRANSFORM_DB.create_index([('reaction_smarts', 'hashed')])
     print('Added hashed index on reaction_smarts')
 
-    main(N = args.num, skip = args.skip)
+    # example_doc = REACTION_DB.find_one({'_id': 68309})
+    # example_doc = REACTION_DB.find_one({'_id': 9004813})
+    # process_an_example_doc(example_doc, test=True)
+    # quit(1)
+
+    main(N = args.num, skip = args.skip, skip_id = args.skip_id)

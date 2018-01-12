@@ -1,22 +1,24 @@
 from __future__ import print_function
+
 import makeit.global_config as gc
 import os
 import cPickle as pickle
-from makeit.global_config import USE_STEREOCHEMISTRY
+from pymongo import MongoClient
+
+USE_STEREOCHEMISTRY = True
 import rdkit.Chem as Chem          
 from rdkit.Chem import AllChem
 import numpy as np
 from functools import partial # used for passing args to multiprocessing
-from utilities.i_o.logging import MyLogger
-from utilities.reactants import clean_reactant_mapping
-from retro_enumeration import *
-from pymongo import MongoClient
-from interfaces.template_transformer import TemplateTransformer
-from prioritization.precursor_prioritization.heuristic_prioritizer import HeuristicPrioritizer
-from prioritization.precursor_prioritization.scs_prioritizer import SCSPrioritizer
-from prioritization.template_prioritization.popularity_prioritizer import PopularityPrioritizer
-from prioritization.template_prioritization.relevance_prioritizer import RelevancePrioritizer
-from prioritization.default_prioritizer import DefaultPrioritizer
+from makeit.utilities.io.logging import MyLogger
+from makeit.utilities.reactants import clean_reactant_mapping
+from makeit.retrosynthetic.results import RetroResult, RetroPrecursor
+from makeit.interfaces.template_transformer import TemplateTransformer
+from makeit.prioritization.precursors.heuristic import HeuristicPrecursorPrioritizer
+from makeit.prioritization.precursors.scscore import SCScorePrecursorPrioritizer
+from makeit.prioritization.templates.popularity import PopularityTemplatePrioritizer
+from makeit.prioritization.templates.relevance import RelevanceTemplatePrioritizer
+from makeit.prioritization.default import DefaultPrioritizer
 from rdchiral.main import rdchiralRun
 from rdchiral.initialization import rdchiralReaction, rdchiralReactants
 retro_transformer_loc = 'retro_transformer'
@@ -27,7 +29,7 @@ class RetroTransformer(TemplateTransformer):
     one-step retrosyntheses for a given molecule.
     '''
 
-    def __init__(self, celery = False, mincount=0, mincount_c=-1, TEMPLATE_DB = None, loc = False, done = None):
+    def __init__(self, celery = False, mincount=0, mincount_chiral=-1, TEMPLATE_DB = None, loc = False, done = None):
         '''
         Initialize a transformer.
         TEMPLATE_DB: indicate the database you want to use (def. none)
@@ -35,33 +37,34 @@ class RetroTransformer(TemplateTransformer):
         '''
         self.done = done
         self.mincount = mincount
-        if mincount_c == -1:
-            self.mincount_c = mincount
+        if mincount_chiral == -1:
+            self.mincount_chiral = mincount
         else:
-            self.mincount_c = mincount_c
+            self.mincount_chiral = mincount_chiral
         self.templates = []
         self.celery = celery
-        if not self.celery and not TEMPLATE_DB:
-            MyLogger.print_and_log('Predefined template database is required for the retro transformer. Exiting...', retro_transformer_loc, level=3)
+        #if not self.celery and not TEMPLATE_DB:
+        #    MyLogger.print_and_log('Predefined template database is required for the retro transformer. Exiting...', retro_transformer_loc, level=3)
         
         self.TEMPLATE_DB = TEMPLATE_DB
         self.precursor_prioritizers = {}
         self.template_prioritizers = {}
         self.precursor_prioritizer = None
         self.template_prioritizer = None
-        
-    def load(self, chiral=False, lowe=False, refs=False, efgs=False,rxn_ex = False):
+
+        super(RetroTransformer, self).__init__()
+   
+    def load(self, TEMPLATE_DB=None, chiral=False, lowe=False, refs=False, rxns=True, efgs=False, rxn_ex=False):
         '''
         Loads and parses the template database to a useable one
         '''
-        
-        MyLogger.print_and_log('Loading retro-synthetic transformer, including all templates with more than {} hits ({} for chiral reactions)'.format(self.mincount, self.mincount_c), retro_transformer_loc)
-        
+  
+        MyLogger.print_and_log('Loading retro-synthetic transformer, including all templates with more than {} hits ({} for chiral reactions)'.format(self.mincount, self.mincount_chiral), retro_transformer_loc)
+   
         self.load_templates(True, chiral=chiral, lowe=lowe, refs=refs, efgs=efgs,rxn_ex = rxn_ex)
         
         MyLogger.print_and_log('Retro-synthetic transformer has been loaded - using {} templates.'.format(self.num_templates), retro_transformer_loc)
         
-
     def get_outcomes(self, smiles, mincount, prioritizers, start_at = -1, end_at = -1,
                      singleonly = False, stop_if = False):
         '''
@@ -78,7 +81,7 @@ class RetroTransformer(TemplateTransformer):
         self.get_template_prioritizers(template_prioritizer)
         # Define mol to operate on
         mol = Chem.MolFromSmiles(smiles)
-        smiles = Chem.MolToSmiles(mol, isomericSmiles = USE_STEREOCHEMISTRY) # to canonicalize
+        smiles = Chem.MolToSmiles(mol, isomericSmiles=True) # to canonicalize
         if self.chiral:
             mol = rdchiralReactants(smiles)
         # Initialize results object
@@ -164,7 +167,7 @@ if __name__ == '__main__':
     MyLogger.initialize_logFile()
     db_client = MongoClient(gc.MONGO['path'],gc.MONGO['id'], connect = gc.MONGO['connect'])
     TEMPLATE_DB = db_client[gc.RETRO_TRANSFORMS_CHIRAL['database']][gc.RETRO_TRANSFORMS_CHIRAL['collection']]
-    t = RetroTransformer(mincount = 100, mincount_c = 50, TEMPLATE_DB=TEMPLATE_DB)
+    t = RetroTransformer(mincount = 100, mincount_chiral = 50, TEMPLATE_DB=TEMPLATE_DB)
     t.load(chiral = True)
     print(t.get_outcomes('C1C(=O)OCC12CC(C)CC2', 100, (gc.heuristic, gc.popularity)).precursors)
     

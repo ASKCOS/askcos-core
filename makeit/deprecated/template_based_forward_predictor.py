@@ -316,7 +316,8 @@ class TemplateBasedForwardPredictor():
 
 if __name__ == '__main__':
     from pymongo import MongoClient
-    db_client = MongoClient('mongodb://guest:guest@askcos2.mit.edu/admin', 27017)
+    import makeit.global_config as gc
+    db_client = MongoClient(gc.MONGO['path'], gc.MONGO[ 'id'], connect=gc.MONGO['connect'])
     TEMPLATE_DB = db_client['reaxys_v2']['transforms_forward_v2']
     SOLVENT_DB = db_client['reaxys']['solvents']
     MODEL_FOLDER = '/home/ccoley/Make-It/makeit/predict/output/01_23_2017'

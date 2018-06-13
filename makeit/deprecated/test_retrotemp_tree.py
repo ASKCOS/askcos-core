@@ -69,7 +69,8 @@ class FocusedTransformer(Transformer):
 
 if __name__ == '__main__':
 
-    db_client = MongoClient('mongodb://guest:guest@askcos2.mit.edu/admin', 27017)
+    import makeit.global_config as gc
+    db_client = MongoClient(gc.MONGO['path'], gc.MONGO[ 'id'], connect=gc.MONGO['connect'])
     reaction_db = db_client['reaxys_v2']['reactions']
 
     RETRO_TRANSFORMS_CHIRAL = {

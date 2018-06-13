@@ -489,7 +489,8 @@ def rxn_dict(_id, info, necessary_reagent = '', num_examples = 0, children = [],
 if __name__ == '__main__':
 
     from pymongo import MongoClient
-    db_client = MongoClient('mongodb://guest:guest@rmg.mit.edu/admin', 27017)
+    import makeit.global_config as gc
+    db_client = MongoClient(gc.MONGO['path'], gc.MONGO[ 'id'], connect=gc.MONGO['connect'])
     TRANSFORM_DB = db_client['reaxys']['transforms_retro_v4']
     CHEMICAL_DB = db_client['reaxys']['chemicals']
     BUYABLE_DB = db_client['reaxys']['buyables']

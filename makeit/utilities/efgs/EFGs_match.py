@@ -14,7 +14,8 @@ def get_EFGS_matches(mol, library=[], exclude=None):
 
     if not library:
         from pymongo import MongoClient
-        client = MongoClient('mongodb://guest:guest@rmg.mit.edu/admin', 27017)
+        import makeit.global_config as gc
+        client = MongoClient(gc.MONGO['path'], gc.MONGO[ 'id'], connect=gc.MONGO['connect'])
         db = client['askcos_transforms']
         EFG_DB = db['EFGs']
         library = [doc for doc in EFG_DB.find()]

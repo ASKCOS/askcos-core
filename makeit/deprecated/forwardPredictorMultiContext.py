@@ -534,7 +534,8 @@ class ForwardPredictor:
 if __name__ == '__main__':
 
 	from pymongo import MongoClient
-	db_client = MongoClient('mongodb://guest:guest@rmg.mit.edu/admin', 27017)
+	import makeit.global_config as gc
+	db_client = MongoClient(gc.MONGO['path'], gc.MONGO[ 'id'], connect=gc.MONGO['connect'])
 	TRANSFORM_DB = db_client['reaxys']['transforms_forward_v1']
 	SOLVENT_DB = db_client['reaxys']['solvents']
 

@@ -3,7 +3,7 @@ from __future__ import print_function
 from global_config import USE_STEREOCHEMISTRY
 import numpy as np
 from scipy.sparse import coo_matrix
-import six; from six.moves import cPickle as pickle
+import makeit.utilities.io.pickle as pickle
 import rdkit.Chem as Chem
 import rdkit.Chem.AllChem as AllChem
 import os

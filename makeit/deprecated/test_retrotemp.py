@@ -1,7 +1,7 @@
 import os
 from pymongo import MongoClient
 import rdkit.Chem as Chem
-import six; from six.moves import cPickle as pickle 
+import makeit.utilities.io.pickle as pickle 
 from rdchiral.main import rdchiralRun, rdchiralReaction, rdchiralReactants
 from time import time
 from makeit.webapp.transformer_v3 import Transformer, apply_one_retrotemplate

@@ -16,7 +16,7 @@ from keras.regularizers import l2
 from makeit.predict.preprocess_candidates import *
 import theano.tensor as T
 from scipy.sparse import coo_matrix
-import six; from six.moves import cPickle as pickle
+import makeit.utilities.io.pickle as pickle
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt    # for visualization

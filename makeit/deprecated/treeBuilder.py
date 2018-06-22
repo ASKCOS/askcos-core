@@ -305,7 +305,7 @@ class TreeBuilder:
             else:
                 at_depth[depth] += 1
         string = 'The current network contains {} nodes ({} chemicals and {} reactions)<br/>\n'.format(num_chemicals + num_reactions, num_chemicals, num_reactions)
-        for (depth, count) in sorted(at_depth.iteritems(), key = lambda x: x[0]):
+        for (depth, count) in sorted(at_depth.items(), key = lambda x: x[0]):
             label = 'chemicals' if depth % 1 == 0 else 'reactions'
             string += '...at depth {:.1f}, {} {}<br/>\n'.format(depth, count, label)
         return string

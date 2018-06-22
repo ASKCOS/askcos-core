@@ -300,7 +300,7 @@ class TemplateBasedForwardPredictor():
                 this_scores[smi] = max(this_scores[smi], sco)
 
             # Sort
-            this_outcome = sorted(this_outcome.iteritems(), key=lambda x: x[1], reverse=True)
+            this_outcome = sorted(this_outcome.items(), key=lambda x: x[1], reverse=True)
             outcomes = []
             for i, (smi, pro) in enumerate(this_outcome):
                 if i == top_n: break

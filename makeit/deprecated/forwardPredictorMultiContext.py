@@ -455,7 +455,7 @@ class ForwardPredictor:
 		self.quit_if_unplausible = quit_if_unplausible
 
 		# Pre-calc descriptors for this set of reactants
-		for (key, val) in edits_to_vectors([], reactants, return_atom_desc_dict = True).iteritems():
+		for (key, val) in edits_to_vectors([], reactants, return_atom_desc_dict = True).items():
 			self.atom_desc_dict[key] = val
 
 		# Clear queues (just to be safe)

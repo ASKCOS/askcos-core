@@ -7,7 +7,7 @@ from EFGs_match import *
 from tqdm import tqdm 
 import os
 import json 
-import six; from six.moves import cPickle as pickle 
+import makeit.utilities.io.pickle as pickle 
 
 '''This script is meant to test out an EFG-based filtering system
 for retrosynthesis. Instead of applying all templates that match, 

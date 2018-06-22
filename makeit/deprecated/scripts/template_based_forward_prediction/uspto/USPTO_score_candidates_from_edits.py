@@ -21,7 +21,7 @@ from makeit.embedding.descriptors import edits_to_vectors, oneHotVector # for te
 import rdkit.Chem as Chem
 import theano.tensor as T
 from scipy.sparse import coo_matrix
-import cPickle as pickle
+import six; from six.moves import cPickle as pickle
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt    # for visualization

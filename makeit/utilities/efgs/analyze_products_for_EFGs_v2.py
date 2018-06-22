@@ -5,7 +5,7 @@ from bson.objectid import ObjectId
 import numpy as np
 from EFGs_match import *
 from tqdm import tqdm 
-import cPickle as pickle
+import six; from six.moves import cPickle as pickle
 import json
 import os
 from copy import copy

@@ -455,7 +455,7 @@ class ForwardPredictor:
 		self.quit_if_unplausible = quit_if_unplausible
 
 		# Pre-calc descriptors for this set of reactants
-		for (key, val) in edits_to_vectors([], reactants, return_atom_desc_dict = True).iteritems():
+		for (key, val) in edits_to_vectors([], reactants, return_atom_desc_dict = True).items():
 			self.atom_desc_dict[key] = val
 
 		# Clear queues (just to be safe)
@@ -534,7 +534,8 @@ class ForwardPredictor:
 if __name__ == '__main__':
 
 	from pymongo import MongoClient
-	db_client = MongoClient('mongodb://guest:guest@rmg.mit.edu/admin', 27017)
+	import makeit.global_config as gc
+	db_client = MongoClient(gc.MONGO['path'], gc.MONGO[ 'id'], connect=gc.MONGO['connect'])
 	TRANSFORM_DB = db_client['reaxys']['transforms_forward_v1']
 	SOLVENT_DB = db_client['reaxys']['solvents']
 

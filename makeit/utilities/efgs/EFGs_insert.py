@@ -1,6 +1,7 @@
 from pymongo import MongoClient
 
-client = MongoClient('mongodb://guest:guest@rmg.mit.edu/admin', 27017)
+import makeit.global_config as gc
+client = MongoClient(gc.MONGO['path'], gc.MONGO[ 'id'], connect=gc.MONGO['connect'])
 db = client['askcos_transforms']
 SMARTS_DB = db['EFGs']
 SMARTS_DB.remove({})

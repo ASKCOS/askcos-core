@@ -5,7 +5,7 @@ from bson.objectid import ObjectId
 import numpy as np
 from EFGs_match import *
 from tqdm import tqdm 
-import cPickle as pickle
+import makeit.utilities.io.pickle as pickle
 import json
 import os
 from copy import copy
@@ -16,7 +16,8 @@ we can develop a 'conservative' system by not applying templates in
 cases where we have not seen a certain functional group co-present with
 the reaction core (in the product).'''
 
-client = MongoClient('mongodb://guest:guest@rmg.mit.edu/admin', 27017)
+import makeit.global_config as gc
+client = MongoClient(gc.MONGO['path'], gc.MONGO[ 'id'], connect=gc.MONGO['connect'])
 db = client['askcos_transforms']
 EFG_DB = db['EFGs']
 library = [doc for doc in EFG_DB.find({'redux': True})]

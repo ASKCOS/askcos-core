@@ -305,7 +305,7 @@ class TreeBuilder:
             else:
                 at_depth[depth] += 1
         string = 'The current network contains {} nodes ({} chemicals and {} reactions)<br/>\n'.format(num_chemicals + num_reactions, num_chemicals, num_reactions)
-        for (depth, count) in sorted(at_depth.iteritems(), key = lambda x: x[0]):
+        for (depth, count) in sorted(at_depth.items(), key = lambda x: x[0]):
             label = 'chemicals' if depth % 1 == 0 else 'reactions'
             string += '...at depth {:.1f}, {} {}<br/>\n'.format(depth, count, label)
         return string
@@ -489,7 +489,8 @@ def rxn_dict(_id, info, necessary_reagent = '', num_examples = 0, children = [],
 if __name__ == '__main__':
 
     from pymongo import MongoClient
-    db_client = MongoClient('mongodb://guest:guest@rmg.mit.edu/admin', 27017)
+    import makeit.global_config as gc
+    db_client = MongoClient(gc.MONGO['path'], gc.MONGO[ 'id'], connect=gc.MONGO['connect'])
     TRANSFORM_DB = db_client['reaxys']['transforms_retro_v4']
     CHEMICAL_DB = db_client['reaxys']['chemicals']
     BUYABLE_DB = db_client['reaxys']['buyables']

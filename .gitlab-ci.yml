@@ -15,8 +15,7 @@ before_script:
 build:
   stage: build
   script:
-    - docker pull $LATEST_TAG || true
-    - docker build --cache-from $LATEST_TAG -t $IMAGE_TAG .
+    - docker build -t $IMAGE_TAG .
     - docker push $IMAGE_TAG
   only:
     - /^release-.*$/
@@ -24,8 +23,7 @@ build:
 build-latest:
   stage: build
   script:
-    - docker pull $LATEST_TAG || true
-    - docker build --cache-from $LATEST_TAG -t $LATEST_TAG .
+    - docker build -t $LATEST_TAG .
     - docker push $LATEST_TAG
   only:
     - /^master$/

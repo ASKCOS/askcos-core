@@ -124,22 +124,18 @@ class RetroTransformer(TemplateTransformer):
         
         MyLogger.print_and_log('Loading retro-synthetic transformer', retro_transformer_loc)
         if self.use_db:
-            MyLogger.print_and_log('reading from db', retro_transformer_loc)
-            try:
-                self.load_from_database()
-            except ServerSelectionTimeoutError:
-                MyLogger.print_and_log('cannot connect to db, reading from file instead', retro_transformer_loc)
-                self.use_db = False
-                self.load_from_file(template_filename, self.template_set)
-        else:
+            self.load_databases()
+            if self.load_all:
+                MyLogger.print_and_log('reading from db', retro_transformer_loc)
+                try:
+                    self.load_from_database()
+                except ServerSelectionTimeoutError:
+                    MyLogger.print_and_log('cannot connect to db, reading from file instead', retro_transformer_loc)
+                    self.use_db = False
+                    self.load_from_file(template_filename, self.template_set)
+        if not self.use_db:
             MyLogger.print_and_log('reading from file', retro_transformer_loc)
             self.load_from_file(template_filename, self.template_set)
-
-        MyLogger.print_and_log(
-            'Retrosynthetic transformer has been loaded - using {} templates (may be multiple template sets!).'.format(
-                self.num_templates
-            ), retro_transformer_loc
-        )
 
     def get_one_template_by_idx(self, index, template_set=None):
         """Returns one template from given template set with given index.
@@ -176,10 +172,14 @@ class RetroTransformer(TemplateTransformer):
             if len(template) != 1:
                 raise ValueError('Duplicate templates found when trying to retrieve one unique template!')
             template = template[0]
-            print(template)
 
         if not self.load_all:
             template = self.doc_to_template(template)
+
+        if not template:
+            raise ValueError('Could not find template from template set "{}" with index "{}"'.format(
+                template_set, index
+            ))
 
         return template
 

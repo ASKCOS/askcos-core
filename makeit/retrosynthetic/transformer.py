@@ -129,11 +129,13 @@ class RetroTransformer(TemplateTransformer):
                 MyLogger.print_and_log('reading from db', retro_transformer_loc)
                 try:
                     self.load_from_database()
+                    # it doesn't make sense to load all templates into memory and then continue to use templates from DB
+                    self.use_db = False
                 except ServerSelectionTimeoutError:
                     MyLogger.print_and_log('cannot connect to db, reading from file instead', retro_transformer_loc)
                     self.use_db = False
                     self.load_from_file(template_filename, self.template_set)
-        if not self.use_db:
+        else:
             MyLogger.print_and_log('reading from file', retro_transformer_loc)
             self.load_from_file(template_filename, self.template_set)
 

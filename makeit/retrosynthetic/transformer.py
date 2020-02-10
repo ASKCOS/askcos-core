@@ -219,6 +219,7 @@ class RetroTransformer(TemplateTransformer):
 
         if not self.load_all:
             templates = [self.doc_to_template(temp) for temp in templates]
+            templates = filter(lambda x: x.get('rxn'), templates)
 
         return templates
 
@@ -420,7 +421,10 @@ class RetroTransformer(TemplateTransformer):
         seen_reactant_combos = []
 
         template = self.get_one_template_by_idx(template_idx, template_set)
-        template['rxn'] = rdchiralReaction(template['reaction_smarts'])
+        try:
+            template['rxn'] = rdchiralReaction(template['reaction_smarts'])
+        except ValueError:
+            return all_outcomes
 
         for precursor in self.apply_one_template(mol, template):
             reactant_smiles = precursor['smiles']

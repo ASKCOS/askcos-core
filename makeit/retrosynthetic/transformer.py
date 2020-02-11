@@ -193,7 +193,7 @@ class RetroTransformer(TemplateTransformer):
             indices (np.ndarray): Numpy array of indices to reorder templates.
 
         Returns:
-            List of templates ready to be applied (i.e. - with rxn object)
+            Generator of templates to be applied (i.e. - with rxn object)
 
         """
         if template_set is None:
@@ -219,8 +219,8 @@ class RetroTransformer(TemplateTransformer):
         templates.sort(key=lambda x: index_list.index(x['index']))
 
         if not self.load_all:
-            templates = [self.doc_to_template(temp) for temp in templates]
-            templates = filter(lambda x: x.get('rxn'), templates)
+            # return generator of templates with rchiralReaction if rdchiralReaction initialization was successful
+            templates = (x for x in (self.doc_to_template(temp) for temp in templates) if x.get('rxn'))
 
         return templates
 

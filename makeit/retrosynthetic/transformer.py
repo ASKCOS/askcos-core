@@ -125,16 +125,15 @@ class RetroTransformer(TemplateTransformer):
         MyLogger.print_and_log('Loading retro-synthetic transformer', retro_transformer_loc)
         if self.use_db:
             self.load_databases()
-            if self.load_all:
-                MyLogger.print_and_log('reading from db', retro_transformer_loc)
-                try:
+            try:
+                self.TEMPLATE_DB.find_one({}) # check if connection to db exists
+                if self.load_all:
                     self.load_from_database()
-                    # it doesn't make sense to load all templates into memory and then continue to use templates from DB
-                    self.use_db = False
-                except ServerSelectionTimeoutError:
-                    MyLogger.print_and_log('cannot connect to db, reading from file instead', retro_transformer_loc)
-                    self.use_db = False
-                    self.load_from_file(template_filename, self.template_set)
+                    self.use_db = False # it doesn't make sense to load all templates into memory and then continue to use templates from DB
+            except ServerSelectionTimeoutError:
+                MyLogger.print_and_log('cannot connect to db, reading from file instead', retro_transformer_loc)
+                self.use_db = False
+                self.load_from_file(template_filename, self.template_set)
         else:
             MyLogger.print_and_log('reading from file', retro_transformer_loc)
             self.load_from_file(template_filename, self.template_set)

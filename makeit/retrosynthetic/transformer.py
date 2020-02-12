@@ -124,9 +124,12 @@ class RetroTransformer(TemplateTransformer):
         
         MyLogger.print_and_log('Loading retro-synthetic transformer', retro_transformer_loc)
         if self.use_db:
-            MyLogger.print_and_log('reading from db', retro_transformer_loc)
+            self.load_databases()
             try:
-                self.load_from_database()
+                self.TEMPLATE_DB.find_one({}) # check if connection to db exists
+                if self.load_all:
+                    self.load_from_database()
+                    self.use_db = False # it doesn't make sense to load all templates into memory and then continue to use templates from DB
             except ServerSelectionTimeoutError:
                 MyLogger.print_and_log('cannot connect to db, reading from file instead', retro_transformer_loc)
                 self.use_db = False
@@ -134,12 +137,6 @@ class RetroTransformer(TemplateTransformer):
         else:
             MyLogger.print_and_log('reading from file', retro_transformer_loc)
             self.load_from_file(template_filename, self.template_set)
-
-        MyLogger.print_and_log(
-            'Retrosynthetic transformer has been loaded - using {} templates (may be multiple template sets!).'.format(
-                self.num_templates
-            ), retro_transformer_loc
-        )
 
     def get_one_template_by_idx(self, index, template_set=None):
         """Returns one template from given template set with given index.
@@ -176,10 +173,14 @@ class RetroTransformer(TemplateTransformer):
             if len(template) != 1:
                 raise ValueError('Duplicate templates found when trying to retrieve one unique template!')
             template = template[0]
-            print(template)
 
         if not self.load_all:
             template = self.doc_to_template(template)
+
+        if not template:
+            raise ValueError('Could not find template from template set "{}" with index "{}"'.format(
+                template_set, index
+            ))
 
         return template
 
@@ -192,7 +193,7 @@ class RetroTransformer(TemplateTransformer):
             indices (np.ndarray): Numpy array of indices to reorder templates.
 
         Returns:
-            List of templates ready to be applied (i.e. - with rxn object)
+            Generator of templates to be applied (i.e. - with rxn object)
 
         """
         if template_set is None:
@@ -218,7 +219,8 @@ class RetroTransformer(TemplateTransformer):
         templates.sort(key=lambda x: index_list.index(x['index']))
 
         if not self.load_all:
-            templates = [self.doc_to_template(temp) for temp in templates]
+            # return generator of templates with rchiralReaction if rdchiralReaction initialization was successful
+            templates = (x for x in (self.doc_to_template(temp) for temp in templates) if x.get('rxn'))
 
         return templates
 
@@ -420,7 +422,10 @@ class RetroTransformer(TemplateTransformer):
         seen_reactant_combos = []
 
         template = self.get_one_template_by_idx(template_idx, template_set)
-        template['rxn'] = rdchiralReaction(template['reaction_smarts'])
+        try:
+            template['rxn'] = rdchiralReaction(template['reaction_smarts'])
+        except ValueError:
+            return all_outcomes
 
         for precursor in self.apply_one_template(mol, template):
             reactant_smiles = precursor['smiles']

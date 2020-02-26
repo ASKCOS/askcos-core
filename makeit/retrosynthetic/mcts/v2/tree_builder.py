@@ -15,6 +15,7 @@ from makeit.utilities.buyable.pricer import Pricer
 from makeit.utilities.formats import chem_dict, rxn_dict
 from makeit.utilities.io import model_loader
 from makeit.utilities.io.logger import MyLogger
+from makeit.utilities.historian.chemicals import ChemHistorian
 
 import askcos_site.askcos_celery.treebuilder.tb_c_worker as tb_c_worker
 
@@ -124,36 +125,44 @@ class MCTS:
 
         self.num_active_pathways = num_active_pathways or self.nproc
 
-        if pricer:
-            self.pricer = pricer
-        else:
-            self.pricer = Pricer()
-            self.pricer.load()
-
-        if chemhistorian:
-            self.chemhistorian = chemhistorian
-        else:
-            from makeit.utilities.historian.chemicals import ChemHistorian
-            self.chemhistorian = ChemHistorian()
-            self.chemhistorian.load_from_file()
+        # Load data and models
+        self.pricer = pricer or self.load_pricer()
+        self.chemhistorian = chemhistorian or self.load_chemhistorian()
+        self.retroTransformer = retroTransformer or self.load_retro_transformer()
 
         # Initialize vars, reset dicts, etc.
         self.reset(soft_reset=False)
-
-        self.retroTransformer = retroTransformer or self.load_retro_transformer()
 
         self.status = {}
 
         from makeit.utilities.with_dummy import with_dummy
         self.allow_join_result = with_dummy
 
-    def load_retro_transformer(self):
+    @staticmethod
+    def load_pricer():
+        """
+        Loads pricer.
+        """
+        pricer = Pricer(use_db=False)
+        pricer.load()
+        return pricer
+
+    @staticmethod
+    def load_chemhistorian():
+        """
+        Loads chemhistorian.
+        """
+        chemhistorian = ChemHistorian(use_db=False)
+        chemhistorian.load()
+        return chemhistorian
+
+    @staticmethod
+    def load_retro_transformer():
         """
         Loads retro transformer model.
         """
-        retro_transformer = model_loader.load_Retro_Transformer()
+        retro_transformer = RetroTransformer()
         retro_transformer.load()
-        # don't load template prioritizer until later, TF doesn't like forking
         return retro_transformer
 
     def reset(self, soft_reset=False):
@@ -1140,12 +1149,8 @@ class MCTS:
         self.template_prioritizer = template_prioritizer
         MyLogger.print_and_log('Active pathway #: {}'.format(num_active_pathways), treebuilder_loc)
 
-        if min_chemical_history_dict['logic'] not in [None, 'none'] and \
-                self.chemhistorian is None:
-            from makeit.utilities.historian.chemicals import ChemHistorian
-            self.chemhistorian = ChemHistorian()
-            self.chemhistorian.load_from_file(refs=False, hashed=True)
-            MyLogger.print_and_log('Loaded compressed chemhistorian from file', treebuilder_loc, level=1)
+        if min_chemical_history_dict['logic'] not in [None, 'none'] and self.chemhistorian is None:
+            self.load_chemhistorian()
 
         # Define stop criterion
         def is_buyable(ppg):
@@ -1229,7 +1234,26 @@ class MCTSCelery(MCTS):
         from celery.result import allow_join_result
         self.allow_join_result = allow_join_result
 
-    def load_retro_transformer(self):
+    @staticmethod
+    def load_pricer():
+        """
+        Loads pricer.
+        """
+        pricer = Pricer(use_db=True)
+        pricer.load()
+        return pricer
+
+    @staticmethod
+    def load_chemhistorian():
+        """
+        Loads chemhistorian.
+        """
+        chemhistorian = ChemHistorian(use_db=True)
+        chemhistorian.load()
+        return chemhistorian
+
+    @staticmethod
+    def load_retro_transformer():
         """
         Loads retro transformer model.
         """

@@ -433,19 +433,13 @@ class MCTS:
             self.update(self.smiles, self.active_pathways[_id])
         self.active_pathways = [{} for _id in range(self.num_active_pathways)]
 
-
     def work(self, i):
-        """Assigns work (if available) to given worker.
+        """
+        Assigns work (if available) to given worker.
 
         Args:
             i (int): Index of worker to be assigned work.
         """
-        # with tf.device('/gpu:%d' % (i % self.ngpus)):
-        #     self.model = RLModel()
-        #     self.model.load(MODEL_PATH)
-
-        # Load models that are required
-        # self.retroTransformer.get_template_prioritizers(gc.relevance)
         self.initialized[i] = True
 
         while True:
@@ -460,27 +454,17 @@ class MCTS:
                     self.idle[i] = False
                     (_id, smiles, template_idx) = self.expansion_queue.get(timeout=0.1)  # short timeout
 
-                    # print('{} grabbed {} and {} from queue'.format(_id, smiles, template_idx))
                     try:
-                        all_outcomes = self.retroTransformer.apply_one_template_by_idx(
-                            _id, smiles, template_idx,
-                        ) # TODO: add settings
+                        # TODO: add settings
+                        all_outcomes = self.retroTransformer.apply_one_template_by_idx(_id, smiles, template_idx)
                     except Exception as e:
                         print(e)
                         all_outcomes = [(_id, smiles, template_idx, [], 0.0)]
-                    # print('{} applied one template and got {}'.format(i, all_outcomes))
-                    # all_outcomes = list of (_id, smiles, template_idx, reactants, filter_score)
-
-
                     self.results_queue.put(all_outcomes)
-                    # print('{} put {} outcomes on queue'.format(i, len(all_outcomes)))
-
                 except VanillaQueue.Empty:
                     self.idle[i] = True
-                    pass # looks like someone got there first...
+                    pass   # looks like someone got there first...
 
-
-            # time.sleep(0.01)
             self.idle[i] = True
 
     def UCB(self, chem_smi, c_exploration=0.2, path=[]):
@@ -1331,3 +1315,9 @@ class MCTSCelery(MCTS):
     def prioritizer(self):
         res = tb_c_worker.template_relevance.delay(self.smiles, self.template_count, self.max_cum_template_prob)
         return res.get(10)
+
+    def work(self, i):
+        """
+        Explicitly override work method of MCTS since Celery does not use it.
+        """
+        raise NotImplementedError('MCTSCelery does not support the work method. Did you mean to use MCTS?')

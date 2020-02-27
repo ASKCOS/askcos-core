@@ -41,9 +41,7 @@ class MCTS:
     """
 
     def __init__(self, retroTransformer=None, pricer=None, max_branching=20, max_depth=3, expansion_time=60,
-                 celery=False, chiral=True, mincount=0, mincount_chiral=0,
-                 template_prioritization=gc.relevance, precursor_prioritization=gc.relevanceheuristic,
-                 chemhistorian=None, nproc=8, num_active_pathways=None):
+                 chemhistorian=None, nproc=8, num_active_pathways=None, **kwargs):
         """
         Initialization of an object of the MCTS class.
 
@@ -69,35 +67,8 @@ class MCTS:
             expansion_time (int, optional): Time (in seconds) to allow for
                 expansion before searching the generated tree for buyable
                 pathways. (default: {60})
-            celery (bool, optional): Whether or not Celery is being used. If
-                True, then the MCTS relies on reservable retrotransformer
-                workers initialized separately. If False, then retrotransformer
-                workers will be spun up using multiprocessing.
-                (default: {False})
-            chiral (bool, optional): Whether or not to pay close attention to
-                chirality. When False, even achiral templates can lead to
-                accidental inversion of chirality in non-reacting parts of the
-                molecule. It is highly recommended to keep this as True.
-                (default: {True})
             nproc (int, optional): Number of retrotransformer processes to fork
                 for faster expansion. (default: {1})
-            mincount (int, optional): Minimum number of precedents for an
-                achiral template for inclusion in the template library. Only
-                used when retrotransformers need to be initialized.
-                (default: {25})
-            mincount_chiral (int, optional): Minimum number of precedents for a
-                chiral template for inclusion in the template library. Only used
-                when retrotransformers need to be initialized. Chiral templates
-                are necessarily more specific, so we generally use a lower
-                threshold than achiral templates. (default: {10})
-            template_prioritization (string, optional): Strategy used for
-                template prioritization, as a string. There are a limited number
-                of available options - consult the global configuration file for
-                info. (default: {gc.popularity})
-            precursor_prioritization (string, optional): Strategy used for
-                precursor prioritization, as a string. There are a limited
-                number of available options - consult the global configuration
-                file for info. (default: {gc.heuristic})
             chem_historian (None or ChemHistorian, optional): ChemHistorian
                 object used to see how often chemicals have occured in
                 database. If None, will be loaded from the default file in the
@@ -106,20 +77,13 @@ class MCTS:
                 pathways. If None, will be set to ``nproc``. (default: {None})
         """
 
-        if not chiral:
+        if 'chiral' in kwargs and not kwargs['chiral']:
             raise ValueError('MCTS only works for chiral expansion!')
 
-        self.mincount = mincount
-        self.mincount_chiral = mincount_chiral
         self.max_depth = max_depth
         self.max_branching = max_branching
         self.expansion_time = expansion_time
-        self.template_prioritization = template_prioritization
-        if self.template_prioritization != gc.relevance:
-            raise ValueError('Cannot do MCTS without relevance template prioritization!')
-        self.precursor_prioritization = precursor_prioritization
         self.nproc = nproc
-        self.chiral = chiral
         self.max_cum_template_prob = 1
         self.sort_trees_by = 'plausibility'
 

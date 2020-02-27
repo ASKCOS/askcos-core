@@ -31,17 +31,28 @@ DONE = 1
 
 class MCTS:
     """
-    This class implements a Monte Carlo Tree Search algorithm for retrosynthetic tree exploration.
-    Individual retrosynthetic trees are then enumerated via a depth-first search.
+    This class implements a Monte Carlo Tree Search algorithm for retrosynthetic
+    tree exploration. Individual retrosynthetic trees are then enumerated via a
+    depth-first search.
 
     This implementation uses native Python multiprocessing.
+
+    Note regarding model and data loading: This class uses pricing data,
+    chemhistorian data, template prioritizer, and retro transformer. The retro
+    transformer additionally needs the precursor prioritizer and fast filter.
+    If instantiating this class with no arguments, the defaults will be loaded
+    for all of these. Otherwise, Pricer, ChemHistorian, and RetroTransformer
+    instances can be passed during initiation. The template prioritizer
+    should be included as part of the RetroTransformer.
 
     Attributes:
 
     """
 
     def __init__(self, retroTransformer=None, pricer=None, max_branching=20, max_depth=3, expansion_time=60,
-                 chemhistorian=None, nproc=8, num_active_pathways=None, **kwargs):
+                 chemhistorian=None, nproc=8, num_active_pathways=None, template_set='reaxys',
+                 template_prioritizer='reaxys', precursor_prioritizer='relevanceheuristic', fast_filter='default',
+                 **kwargs):
         """
         Initialization of an object of the MCTS class.
 
@@ -92,7 +103,12 @@ class MCTS:
         # Load data and models
         self.pricer = pricer or self.load_pricer()
         self.chemhistorian = chemhistorian or self.load_chemhistorian()
-        self.retroTransformer = retroTransformer or self.load_retro_transformer()
+        self.retroTransformer = retroTransformer or self.load_retro_transformer(
+            template_set=template_set,
+            template_prioritizer=template_prioritizer,
+            precursor_prioritizer=precursor_prioritizer,
+            fast_filter=fast_filter
+        )
 
         # Initialize vars, reset dicts, etc.
         self.reset(soft_reset=False)
@@ -121,11 +137,17 @@ class MCTS:
         return chemhistorian
 
     @staticmethod
-    def load_retro_transformer():
+    def load_retro_transformer(template_set='reaxys', template_prioritizer='reaxys',
+                               precursor_prioritizer='relevanceheuristic', fast_filter='default'):
         """
         Loads retro transformer model.
         """
-        retro_transformer = RetroTransformer()
+        retro_transformer = RetroTransformer(
+            template_set=template_set,
+            template_prioritizer=template_prioritizer,
+            precursor_prioritizer=precursor_prioritizer,
+            fast_filter=fast_filter
+        )
         retro_transformer.load()
         return retro_transformer
 
@@ -442,7 +464,6 @@ class MCTS:
                     try:
                         all_outcomes = self.retroTransformer.apply_one_template_by_idx(
                             _id, smiles, template_idx,
-                            template_prioritizer=template_prioritizer
                         ) # TODO: add settings
                     except Exception as e:
                         print(e)
@@ -762,7 +783,7 @@ class MCTS:
         return # self.Chemicals, C.pathway_count, self.time_for_first_path
 
     def prioritizer(self):
-        return self.template_prioritizer.predict(self.smiles, self.template_count, self.max_cum_template_prob)
+        return self.retroTransformer.template_prioritizer.predict(self.smiles, self.template_count, self.max_cum_template_prob)
 
     # QUESTION: Why return the empty list?
     def tree_status(self):
@@ -1188,6 +1209,14 @@ class MCTSCelery(MCTS):
     """
     This is a subclass of MCTS which uses celery for multiprocessing.
 
+    Note regarding model and data loading: This class uses pricing data,
+    chemhistorian data, template prioritizer, and retro transformer. The retro
+    transformer additionally needs the precursor prioritizer and fast filter.
+    If instantiating this class with no arguments, only Pricer and ChemHistorian
+    data will be loaded (using database) by default. The RetroTransformer
+    is provided via ``tb_c_worker`` which is configured separately. The
+    template prioritizer should be passed directly to ``get_buyable_paths``.
+
     Attributes:
 
     """
@@ -1217,7 +1246,7 @@ class MCTSCelery(MCTS):
         return chemhistorian
 
     @staticmethod
-    def load_retro_transformer():
+    def load_retro_transformer(**kwargs):
         """
         Loads retro transformer model.
         """

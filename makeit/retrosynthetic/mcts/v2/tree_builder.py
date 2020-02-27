@@ -1022,15 +1022,14 @@ class MCTS:
                           expansion_time=30,
                           nproc=12,
                           num_active_pathways=None,
-                          chiral=True,
                           max_trees=5000,
                           max_ppg=1e10,
-                          known_bad_reactions=[],
-                          forbidden_molecules=[],
+                          known_bad_reactions=None,
+                          forbidden_molecules=None,
                           template_count=100,
                           max_cum_template_prob=0.995,
-                          max_natom_dict=defaultdict(lambda: 1e9, {'logic': None}),
-                          min_chemical_history_dict={'as_reactant': 1e9, 'as_product': 1e9, 'logic': None},
+                          max_natom_dict=None,
+                          min_chemical_history_dict=None,
                           apply_fast_filter=True,
                           filter_threshold=0.75,
                           soft_reset=False,
@@ -1055,11 +1054,6 @@ class MCTS:
                 for faster expansion. (default: {12})
             num_active_pathways (int or None, optional): Number of active
                 pathways. (default: {None})
-            chiral (bool, optional): Whether or not to pay close attention to
-                chirality. When False, even achiral templates can lead to
-                accidental inversion of chirality in non-reacting parts of the
-                molecule. It is highly recommended to keep this as True.
-                (default: {True})
             max_trees (int, optional): Maximum number of trees to return.
                 (default: {5000})
             max_ppg (int, optional): Maximum price per gram of any chemical
@@ -1101,11 +1095,10 @@ class MCTS:
         """
         self.smiles = smiles
         self.max_depth = max_depth
+        self.max_branching = max_branching
         self.expansion_time = expansion_time
         self.nproc = nproc
-        if num_active_pathways is None:
-            num_active_pathways = nproc
-        self.num_active_pathways = num_active_pathways
+        self.num_active_pathways = num_active_pathways or self.nproc
         self.max_trees = max_trees
         self.max_cum_template_prob = max_cum_template_prob
         self.template_count = template_count
@@ -1116,6 +1109,12 @@ class MCTS:
         self.max_ppg = max_ppg
         self.sort_trees_by = sort_trees_by
         self.template_prioritizer = template_prioritizer
+
+        known_bad_reactions = known_bad_reactions or []
+        forbidden_molecules = forbidden_molecules or []
+        max_natom_dict = max_natom_dict or defaultdict(lambda: 1e9, {'logic': None})
+        min_chemical_history_dict = min_chemical_history_dict or {'as_reactant': 1e9, 'as_product': 1e9, 'logic': None}
+
         MyLogger.print_and_log('Active pathway #: {}'.format(num_active_pathways), treebuilder_loc)
 
         if min_chemical_history_dict['logic'] not in [None, 'none'] and self.chemhistorian is None:

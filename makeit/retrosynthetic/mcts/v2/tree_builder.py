@@ -134,7 +134,7 @@ class MCTS:
         """
         Loads chemhistorian.
         """
-        chemhistorian = ChemHistorian(use_db=False)
+        chemhistorian = ChemHistorian(use_db=False, hashed=True)
         chemhistorian.load()
         return chemhistorian
 
@@ -1161,7 +1161,7 @@ class MCTS:
         MyLogger.print_and_log('Active pathway #: {}'.format(num_active_pathways), treebuilder_loc)
 
         if min_chemical_history_dict['logic'] not in [None, 'none'] and self.chemhistorian is None:
-            self.load_chemhistorian()
+            self.chemhistorian = self.load_chemhistorian()
 
         # Define stop criterion
         def is_buyable(ppg):
@@ -1267,7 +1267,7 @@ class MCTSCelery(MCTS):
         """
         Loads chemhistorian.
         """
-        chemhistorian = ChemHistorian(use_db=True)
+        chemhistorian = ChemHistorian(use_db=True, hashed=True)
         chemhistorian.load()
         return chemhistorian
 

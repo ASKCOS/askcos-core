@@ -13,9 +13,10 @@ from makeit.retrosynthetic.mcts.nodes import Chemical, Reaction, ChemicalTemplat
 from makeit.retrosynthetic.transformer import RetroTransformer
 from makeit.utilities.buyable.pricer import Pricer
 from makeit.utilities.formats import chem_dict, rxn_dict
-from makeit.utilities.io import model_loader
 from makeit.utilities.io.logger import MyLogger
 from makeit.utilities.historian.chemicals import ChemHistorian
+from makeit.prioritization.templates.relevance import RelevanceTemplatePrioritizer
+from makeit.synthetic.evaluation.fast_filter import FastFilterScorer
 
 import askcos_site.askcos_celery.treebuilder.tb_c_worker as tb_c_worker
 
@@ -105,10 +106,11 @@ class MCTS:
         self.chemhistorian = chemhistorian or self.load_chemhistorian()
         self.retroTransformer = retroTransformer or self.load_retro_transformer(
             template_set=template_set,
-            template_prioritizer=template_prioritizer,
             precursor_prioritizer=precursor_prioritizer,
-            fast_filter=fast_filter
         )
+        # The template prioritizer and fast filter are TF models which must be loaded in each child process
+        self.template_prioritizer = template_prioritizer
+        self.fast_filter = fast_filter
 
         # Initialize vars, reset dicts, etc.
         self.reset(soft_reset=False)
@@ -137,19 +139,42 @@ class MCTS:
         return chemhistorian
 
     @staticmethod
-    def load_retro_transformer(template_set='reaxys', template_prioritizer='reaxys',
-                               precursor_prioritizer='relevanceheuristic', fast_filter='default'):
+    def load_retro_transformer(template_set='reaxys', precursor_prioritizer='relevanceheuristic'):
         """
         Loads retro transformer model.
         """
         retro_transformer = RetroTransformer(
             template_set=template_set,
-            template_prioritizer=template_prioritizer,
+            template_prioritizer=None,
             precursor_prioritizer=precursor_prioritizer,
-            fast_filter=fast_filter
+            fast_filter=None
         )
         retro_transformer.load()
         return retro_transformer
+
+    @staticmethod
+    def load_template_prioritizer(tp):
+        """
+        Loads template prioritizer model.
+        """
+        if tp in gc.RELEVANCE_TEMPLATE_PRIORITIZATION:
+            template_prioritizer = RelevanceTemplatePrioritizer()
+            template_prioritizer.load_model(gc.RELEVANCE_TEMPLATE_PRIORITIZATION[tp]['model_path'])
+        else:
+            raise ValueError('Unsupported template prioritizer "{0}"'.format(tp))
+        return template_prioritizer
+
+    @staticmethod
+    def load_fast_filter(ff):
+        if ff == 'default':
+            fast_filter_object = FastFilterScorer()
+            fast_filter_object.load()
+
+            def fast_filter(x, y):
+                return fast_filter_object.evaluate(x, y)[0][0]['score']
+        else:
+            raise ValueError('Unsupported fast filter "{0}"'.format(ff))
+        return fast_filter
 
     def reset(self, soft_reset=False):
         """
@@ -278,6 +303,14 @@ class MCTS:
         # MyLogger.print_and_log('All tree building processes done.', treebuilder_loc)
         self.running = False
 
+    def wait_until_ready(self):
+        """
+        Wait until all workers are fully initialized and ready to being work.
+        """
+        while not all(self.initialized):
+            MyLogger.print_and_log('Waiting for workers to initialize...', treebuilder_loc)
+            time.sleep(2)
+
     def coordinate(self, soft_stop=False, known_bad_reactions=[], forbidden_molecules=[], return_first=False):
         """Coordinates workers.
 
@@ -291,10 +324,7 @@ class MCTS:
             return_first (bool, optional): Whether to return after finding first
                 pathway. (default: {False})
         """
-        # if not self.celery:
-        #     while not all(self.initialized):
-        #         MyLogger.print_and_log('Waiting for workers to initialize...', treebuilder_loc)
-        #         time.sleep(2)
+        self.wait_until_ready()
         start_time = time.time()
         elapsed_time = time.time() - start_time
         next = 1
@@ -440,6 +470,10 @@ class MCTS:
         Args:
             i (int): Index of worker to be assigned work.
         """
+        # Need to load individual template prioritizer and fast filter models in each process
+        template_prioritizer = self.load_template_prioritizer(self.template_prioritizer)
+        fast_filter = self.load_fast_filter(self.fast_filter)
+
         self.initialized[i] = True
 
         while True:
@@ -456,7 +490,11 @@ class MCTS:
 
                     try:
                         # TODO: add settings
-                        all_outcomes = self.retroTransformer.apply_one_template_by_idx(_id, smiles, template_idx)
+                        all_outcomes = self.retroTransformer.apply_one_template_by_idx(
+                            _id, smiles, template_idx,
+                            template_prioritizer=template_prioritizer,
+                            fast_filter=fast_filter,
+                        )
                     except Exception as e:
                         print(e)
                         all_outcomes = [(_id, smiles, template_idx, [], 0.0)]
@@ -732,7 +770,7 @@ class MCTS:
             self.prepare()
 
             # Define first chemical node (target)
-            probs, indeces = self.prioritizer()
+            probs, indeces = self.get_initial_prioritization()
             value = 1 # current value assigned to precursor (note: may replace with real value function)
             self.Chemicals[self.smiles] = Chemical(self.smiles)
             self.Chemicals[self.smiles].set_template_relevance_probs(probs, indeces, value)
@@ -766,8 +804,13 @@ class MCTS:
         print("---------------------------")
         return # self.Chemicals, C.pathway_count, self.time_for_first_path
 
-    def prioritizer(self):
-        return self.retroTransformer.template_prioritizer.predict(self.smiles, self.template_count, self.max_cum_template_prob)
+    def get_initial_prioritization(self):
+        """
+        Instantiate a template prioritization model and get predictions to
+        initialize the tree search.
+        """
+        template_prioritizer = self.load_template_prioritizer(self.template_prioritizer)
+        return template_prioritizer.predict(self.smiles, self.template_count, self.max_cum_template_prob)
 
     # QUESTION: Why return the empty list?
     def tree_status(self):
@@ -1311,7 +1354,10 @@ class MCTSCelery(MCTS):
             for i in range(len(self.pending_results)):
                 self.pending_results[i].revoke()
 
-    def prioritizer(self):
+    def get_initial_prioritization(self):
+        """
+        Get template prioritizer predictions to initialize the tree search.
+        """
         res = tb_c_worker.template_relevance.delay(self.smiles, self.template_count, self.max_cum_template_prob)
         return res.get(10)
 
@@ -1320,3 +1366,9 @@ class MCTSCelery(MCTS):
         Explicitly override work method of MCTS since Celery does not use it.
         """
         raise NotImplementedError('MCTSCelery does not support the work method. Did you mean to use MCTS?')
+
+    def wait_until_ready(self):
+        """
+        No need to wait for Celery workers since they should be pre-initialized.
+        """
+        pass

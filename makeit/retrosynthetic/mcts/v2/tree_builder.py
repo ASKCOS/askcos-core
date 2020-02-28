@@ -180,8 +180,6 @@ class MCTS:
         """
         Prepare for a new expansion
 
-        TODO: add "soft" feature which does not spin up new workers
-
         Args:
             soft_reset (bool, optional): Whether to do a soft reset.
                 (default: {False})
@@ -230,11 +228,12 @@ class MCTS:
                 pass
 
     def expand(self, _id, smiles, template_idx):
-        """Adds pathway to be worked on with multiprocessing.
+        """
+        Adds pathway to be worked on with multiprocessing.
 
         Args:
             _id (int): ID of pending pathway.
-            smiles (str): SMILES string of molecule to be exanded.
+            smiles (str): SMILES string of molecule to be expanded.
             template_idx (int): ID of template to apply to molecule.
         """
         self.expansion_queue.put((_id, smiles, template_idx))
@@ -260,7 +259,8 @@ class MCTS:
             p.start()
 
     def get_ready_result(self):
-        """Yields processed results from multiprocessing.
+        """
+        Yields processed results from multiprocessing.
 
         Yields:
             list of 5-tuples of (int, string, int, list, float): Results
@@ -270,7 +270,8 @@ class MCTS:
             yield self.results_queue.get(timeout=0.5)
 
     def set_initial_target(self, _id, leaves):  # i = index of active pathway
-        """Sets the first target.
+        """
+        Sets the first target.
 
         Expands given molecules with given templates.
 
@@ -286,7 +287,8 @@ class MCTS:
             self.expand(_id, chem_smi, template_idx)
 
     def stop(self, soft_stop=False):
-        """Stops work with multiprocessing.
+        """
+        Stops work with multiprocessing.
 
         Args:
             soft_stop (bool, optional): Whether to let active workers
@@ -311,7 +313,7 @@ class MCTS:
             MyLogger.print_and_log('Waiting for workers to initialize...', treebuilder_loc)
             time.sleep(2)
 
-    def coordinate(self, soft_stop=False, known_bad_reactions=[], forbidden_molecules=[], return_first=False):
+    def coordinate(self, soft_stop=False, known_bad_reactions=None, forbidden_molecules=None, return_first=False):
         """Coordinates workers.
 
         Args:
@@ -324,18 +326,21 @@ class MCTS:
             return_first (bool, optional): Whether to return after finding first
                 pathway. (default: {False})
         """
+        known_bad_reactions = known_bad_reactions or []
+        forbidden_molecules = forbidden_molecules or []
+
         self.wait_until_ready()
         start_time = time.time()
         elapsed_time = time.time() - start_time
-        next = 1
-        MyLogger.print_and_log('Starting cooridnation loop', treebuilder_loc)
-        while (elapsed_time < self.expansion_time): # and self.waiting_for_results():
+        next_log = 1
+        MyLogger.print_and_log('Starting coordination loop', treebuilder_loc)
+        while elapsed_time < self.expansion_time:
 
-            if (int(elapsed_time)//5 == next):
-                next += 1
-                print ("Worked for {}/{} s".format(int(elapsed_time*10)/10.0, self.expansion_time))
-                print ("... current min-price {}".format(self.Chemicals[self.smiles].price))
-                print ("... |C| = {} |R| = {}".format(len(self.Chemicals), len(self.status)))
+            if int(elapsed_time) // 5 == next_log:
+                next_log += 1
+                print("Worked for {}/{} s".format(int(elapsed_time * 10) / 10.0, self.expansion_time))
+                print("... current min-price {}".format(self.Chemicals[self.smiles].price))
+                print("... |C| = {} |R| = {}".format(len(self.Chemicals), len(self.status)))
                 for _id in range(self.num_active_pathways):
                     print('Active pathway {}: {}'.format(_id, self.active_pathways[_id]))
                 print('Active pathway pending? {}'.format(self.active_pathways_pending))
@@ -364,14 +369,13 @@ class MCTS:
                 for (_id, chem_smi, template_idx, reactants, filter_score) in all_outcomes:
                     # print('coord pulled {} result from result queue'.format(chem_smi))
                     self.status[(chem_smi, template_idx)] = DONE
-                    # R = self.Chemicals[chem_smi].reactions[template_idx]
-                    C = self.Chemicals[chem_smi]
-                    CTA = C.template_idx_results[template_idx] # TODO: make sure CTA created
-                    CTA.waiting = False
+                    chem = self.Chemicals[chem_smi]
+                    cta = chem.template_idx_results[template_idx]  # TODO: make sure cta created
+                    cta.waiting = False
 
                     # Any proposed reactants?
                     if len(reactants) == 0:
-                        CTA.valid = False # no precursors, reaction failed
+                        cta.valid = False # no precursors, reaction failed
                         # print('No reactants found for {} {}'.format(_id, chem_smi))
                         continue
 
@@ -380,58 +384,54 @@ class MCTS:
 
                     # Banned reaction?
                     if '{}>>{}'.format(reactant_smiles, chem_smi) in known_bad_reactions:
-                        CTA.valid = False
+                        cta.valid = False
                         continue
 
                     # Banned molecule?
                     if any(smi in forbidden_molecules for (smi, _, _, _) in reactants):
-                        CTA.valid = False
+                        cta.valid = False
                         continue
 
-                    # TODO: check if banned reaction
                     matched_prev = False
-                    for prev_tid, prev_cta in C.template_idx_results.items():
+                    for prev_tid, prev_cta in chem.template_idx_results.items():
                         if reactant_smiles in prev_cta.reactions:
                             prev_R = prev_cta.reactions[reactant_smiles]
                             matched_prev = True
                             # Now merge the two...
                             prev_R.tforms.append(template_idx)
-                            prev_R.template_score = max(C.prob[template_idx], prev_R.template_score)
-                            CTA.reactions[reactant_smiles] = prev_R
+                            prev_R.template_score = max(chem.prob[template_idx], prev_R.template_score)
+                            cta.reactions[reactant_smiles] = prev_R
                             break
                     if matched_prev:
-                        continue # don't make a new reaction
+                        continue  # don't make a new reaction
 
                     # Define reaction using product SMILES, template_idx, and reactants SMILES
-                    R = Reaction(chem_smi, template_idx)
-                    R.plausibility = filter_score # fast filter score
-                    R.template_score = C.prob[template_idx] # template relevance
-                    #for smi, prob, value in reactants:
-                    for (smi, top_probs, top_indeces, value) in reactants: # all precursors
-                        R.reactant_smiles.append(smi)
+                    rxn = Reaction(chem_smi, template_idx)
+                    rxn.plausibility = filter_score  # fast filter score
+                    rxn.template_score = chem.prob[template_idx]  # template relevance
+                    for (smi, top_probs, top_indices, value) in reactants:  # all precursors
+                        rxn.reactant_smiles.append(smi)
                         if smi not in self.Chemicals:
                             self.Chemicals[smi] = Chemical(smi)
-                            self.Chemicals[smi].set_template_relevance_probs(top_probs, top_indeces, value)
+                            self.Chemicals[smi].set_template_relevance_probs(top_probs, top_indices, value)
 
                             ppg = self.pricer.lookup_smiles(smi, alreadyCanonical=True)
                             self.Chemicals[smi].purchase_price = ppg
-                            # if ppg is not None and ppg > 0:
-                            #     self.Chemicals[smi].set_price(ppg)
 
                             hist = self.chemhistorian.lookup_smiles(smi, alreadyCanonical=True)
                             self.Chemicals[smi].as_reactant = hist['as_reactant']
                             self.Chemicals[smi].as_product = hist['as_product']
 
                             if self.is_a_terminal_node(smi, ppg, hist):
-                                self.Chemicals[smi].set_price(1) # all nodes treated the same for now
+                                self.Chemicals[smi].set_price(1)  # all nodes treated the same for now
                                 self.Chemicals[smi].terminal = True
                                 self.Chemicals[smi].done = True
                                 # print('TERMINAL: {}'.format(self.Chemicals[smi]))# DEBUG
 
-                    R.estimate_price = sum([self.Chemicals[smi].estimate_price for smi in R.reactant_smiles])
+                    rxn.estimate_price = sum([self.Chemicals[smi].estimate_price for smi in rxn.reactant_smiles])
 
-                    # Add this reaction result to CTA (key = reactant smiles)
-                    CTA.reactions[reactant_smiles] = R
+                    # Add this reaction result to cta (key = reactant smiles)
+                    cta.reactions[reactant_smiles] = rxn
 
             # See if this rollout is done (TODO: make this Celery compatible)
             for _id in range(self.num_active_pathways):
@@ -453,7 +453,7 @@ class MCTS:
                     MyLogger.print_and_log('Stoping expansion to return first pathway as requested', treebuilder_loc)
                     break
 
-            if  all(pathway == {} for pathway in self.active_pathways) and len(self.pending_results) == 0:
+            if all(pathway == {} for pathway in self.active_pathways) and len(self.pending_results) == 0:
                 MyLogger.print_and_log('Cannot expand any further! Stuck?', treebuilder_loc)
                 break
 
@@ -461,6 +461,7 @@ class MCTS:
 
         for _id in range(self.num_active_pathways):
             self.update(self.smiles, self.active_pathways[_id])
+
         self.active_pathways = [{} for _id in range(self.num_active_pathways)]
 
     def work(self, i):
@@ -505,8 +506,10 @@ class MCTS:
 
             self.idle[i] = True
 
-    def UCB(self, chem_smi, c_exploration=0.2, path=[]):
-        """Finds best reaction for a given chemical.
+    def UCB(self, chem_smi, c_exploration=0.2, path=None):
+        """
+        Finds best reaction for a given chemical. Variation of upper confidence
+        bound for trees.
 
         Can either select an unapplied template to apply, or select a specific
         reactant to expand further (?)
@@ -514,37 +517,37 @@ class MCTS:
 
         Args:
             chem_smi (str): SMILES string of target chemical.
-            c_exploration (float, optional): ?? Used to calculate reaction
-                score. (default: {0.2})
-            path (list or dict, optional): Current reation path. (default: {[]})
+            c_exploration (float, optional): weight for exploration. (default: {0.2})
+            path (list or dict, optional): Current reaction path. (default: {[]})
 
         Returns:
             2-tuple of (int, str): Index of template and SMILES strings of
                 reactants corresponding to the highest scoring reaction
                 resulting in the target product.
         """
+        path = path or []
         rxn_scores = []
 
-        C = self.Chemicals[chem_smi]
-        product_visits = C.visit_count
+        chem = self.Chemicals[chem_smi]
+        product_visits = chem.visit_count
         max_estimate_price = 0
 
-        for template_idx in C.template_idx_results:
-            CTA = C.template_idx_results[template_idx]
-            if CTA.waiting or not CTA.valid:
+        for template_idx in chem.template_idx_results:
+            cta = chem.template_idx_results[template_idx]
+            if cta.waiting or not cta.valid:
                 continue
 
-            for reactants_smi in CTA.reactions:
-                R = CTA.reactions[reactants_smi]
+            for reactants_smi in cta.reactions:
+                rxn = cta.reactions[reactants_smi]
 
-                if len(set(R.reactant_smiles) & set(path)) > 0: # avoid cycles
+                if len(set(rxn.reactant_smiles) & set(path)) > 0: # avoid cycles
                     continue
-                if R.done:
+                if rxn.done:
                     continue
-                max_estimate_price = max(max_estimate_price, R.estimate_price)
-                Q_sa = - R.estimate_price
+                max_estimate_price = max(max_estimate_price, rxn.estimate_price)
+                Q_sa = - rxn.estimate_price
                 try:
-                    U_sa = c_exploration * C.prob[template_idx] * np.sqrt(product_visits) / (1 + R.visit_count)
+                    U_sa = c_exploration * chem.prob[template_idx] * np.sqrt(product_visits) / (1 + rxn.visit_count)
                 except:
                     print(chem_smi, product_visits)
                 score = Q_sa + U_sa
@@ -553,35 +556,38 @@ class MCTS:
         # unexpanded template - find most relevant template that hasn't been tried
         num_branches = len(rxn_scores)
         if num_branches < self.max_branching or chem_smi == self.smiles:
-            for template_idx in C.top_indeces:
-                if template_idx not in C.template_idx_results:
+            for template_idx in chem.top_indeces:
+                if template_idx not in chem.template_idx_results:
                     Q_sa = - (max_estimate_price + 0.1)
-                    U_sa = c_exploration * C.prob[template_idx] * np.sqrt(product_visits) / 1
+                    U_sa = c_exploration * chem.prob[template_idx] * np.sqrt(product_visits) / 1
                     score = Q_sa + U_sa
-                    rxn_scores.append((score, template_idx, None)) # record estimated score if we were to actually apply that template
+                    # record estimated score if we were to actually apply that template
+                    rxn_scores.append((score, template_idx, None))
                     # TODO: figure out if this "None" makes sense for the reactants smiles
                     break
 
         if len(rxn_scores) > 0:
             sorted_rxn_scores = sorted(rxn_scores, key=lambda x: x[0], reverse=True)
-            best_rxn_score, selected_template_idx, selected_reactants_smi = sorted_rxn_scores[0] # get next best template to apply
+            # get next best template to apply
+            best_rxn_score, selected_template_idx, selected_reactants_smi = sorted_rxn_scores[0]
         else:
             selected_template_idx, selected_reactants_smi = None, None
 
         return selected_template_idx, selected_reactants_smi
 
     def select_leaf(self, c_exploration=1.):
-        """Builds reaction pathways??
+        """
+        Select leaf to be simulated next.
 
         Args:
-            c_exploration (float, optional): ?? (default: {1.0})
+            c_exploration (float, optional): weight for exploration passed to
+                UCB (default: {1.0})
 
         Returns:
             2-tuple of (list of 2-tuples of (str, int), dict): SMILES strings of
                 chemical and corresponding template index and pathways from a
                 chemical to its reactants??
         """
-        #start_time = time.time()
         pathway = {}
         leaves = []
         queue = VanillaQueue.Queue()
@@ -589,7 +595,7 @@ class MCTS:
 
         while not queue.empty():
             chem_smi, depth, path = queue.get()
-            if depth >= self.max_depth or chem_smi in pathway: # don't go too deep or recursively
+            if depth >= self.max_depth or chem_smi in pathway:  # don't go too deep or recursively
                 continue
             template_idx, reactants_smi = self.UCB(chem_smi, c_exploration=c_exploration, path=path)
             if template_idx is None:
@@ -597,48 +603,40 @@ class MCTS:
 
             # Only grow pathway when we have picked a specific reactants_smi (?)
             if reactants_smi is not None:
-                pathway[chem_smi] = (template_idx, reactants_smi) # TODO: figure out if reactants_smi==None case is an issue
+                pathway[chem_smi] = (template_idx, reactants_smi)
             else:
-                pathway[chem_smi] = template_idx # still record template selection
+                # TODO: figure out if reactants_smi==None case is an issue
+                pathway[chem_smi] = template_idx  # still record template selection
 
-            C = self.Chemicals[chem_smi]
-            C.visit_count += VIRTUAL_LOSS
+            chem = self.Chemicals[chem_smi]
+            chem.visit_count += VIRTUAL_LOSS
 
-            # print('Looking at chemical C: {}'.format(C))
-            if template_idx not in C.template_idx_results:
-                # print('Creating CTA for {} and {}'.format(chem_smi, template_idx))
-                C.template_idx_results[template_idx] = ChemicalTemplateApplication(chem_smi, template_idx)
-                CTA = C.template_idx_results[template_idx]
-
-                # TODO: figure out VIRTUAL_LOSS for R.visit_count change?
-                # C.reactions[template_idx] = Reaction(chem_smi, template_idx)
-                # R = C.reactions[template_idx]
-                # R.visit_count += VIRTUAL_LOSS
+            if template_idx not in chem.template_idx_results:
+                chem.template_idx_results[template_idx] = ChemicalTemplateApplication(chem_smi, template_idx)
                 leaves.append((chem_smi, template_idx))
-
             else:
-                # Can we assume that the reactants_smi exists in this CTA? I guess so...
-                CTA = C.template_idx_results[template_idx]
+                # Can we assume that the reactants_smi exists in this cta? I guess so...
+                cta = chem.template_idx_results[template_idx]
 
-                if reactants_smi: # if we choose a specific reaction, not just a template...
-                    if reactants_smi in CTA.reactions:
+                if reactants_smi:  # if we choose a specific reaction, not just a template...
+                    if reactants_smi in cta.reactions:
 
-                        R = CTA.reactions[reactants_smi]
-                        R.visit_count += VIRTUAL_LOSS
+                        rxn = cta.reactions[reactants_smi]
+                        rxn.visit_count += VIRTUAL_LOSS
 
-                        for smi in R.reactant_smiles:
+                        for smi in rxn.reactant_smiles:
                             assert smi in self.Chemicals
-                            # if self.Chemicals[smi].purchase_price == -1:
                             if not self.Chemicals[smi].done:
                                 queue.put((smi, depth+1, path+[smi]))
-                        if R.done:
-                            C.visit_count += R.visit_count
-                            R.visit_count += R.visit_count
+                        if rxn.done:
+                            chem.visit_count += rxn.visit_count
+                            rxn.visit_count += rxn.visit_count
 
         return leaves, pathway
 
     def update(self, chem_smi, pathway, depth=0):
-        """??
+        """
+        Backpropagate results of simulation up the tree.
 
         Args:
             chem_smi (str): SMILES string of
@@ -651,12 +649,12 @@ class MCTS:
                     (template_idx, reactants_smi) = pathway[smi]
                 else:
                     (template_idx, reactants_smi) = (pathway[smi], None)
-                C = self.Chemicals[smi]
-                CTA = C.template_idx_results[template_idx]
-                C.visit_count -= (VIRTUAL_LOSS - 1)
+                chem = self.Chemicals[smi]
+                cta = chem.template_idx_results[template_idx]
+                chem.visit_count -= (VIRTUAL_LOSS - 1)
                 if reactants_smi:
-                    R = CTA.reactions[reactants_smi]
-                    R.visit_count -= (VIRTUAL_LOSS - 1)
+                    rxn = cta.reactions[reactants_smi]
+                    rxn.visit_count -= (VIRTUAL_LOSS - 1)
 
         if (chem_smi not in pathway) or (depth >= self.max_depth):
             return
@@ -666,38 +664,38 @@ class MCTS:
         else:
             (template_idx, reactants_smi) = (pathway[chem_smi], None)
 
-        C = self.Chemicals[chem_smi]
-        CTA = C.template_idx_results[template_idx]
-        if CTA.waiting: # haven't actually expanded
+        chem = self.Chemicals[chem_smi]
+        cta = chem.template_idx_results[template_idx]
+        if cta.waiting:  # haven't actually expanded
             return
 
         if reactants_smi:
-            R = CTA.reactions[reactants_smi]
-            if R.valid and (not R.done):
-                R.done = all([self.Chemicals[smi].done for smi in R.reactant_smiles])
+            rxn = cta.reactions[reactants_smi]
+            if rxn.valid and (not rxn.done):
+                rxn.done = all([self.Chemicals[smi].done for smi in rxn.reactant_smiles])
 
-                for smi in R.reactant_smiles:
+                for smi in rxn.reactant_smiles:
                     self.update(smi, pathway, depth+1)
 
-                estimate_price = sum([self.Chemicals[smi].estimate_price for smi in R.reactant_smiles])
-                R.update_estimate_price(estimate_price)
-                C.update_estimate_price(estimate_price)
+                estimate_price = sum([self.Chemicals[smi].estimate_price for smi in rxn.reactant_smiles])
+                rxn.update_estimate_price(estimate_price)
+                chem.update_estimate_price(estimate_price)
 
-                price_list = [self.Chemicals[smi].price for smi in R.reactant_smiles]
+                price_list = [self.Chemicals[smi].price for smi in rxn.reactant_smiles]
                 if all([price != -1 for price in price_list]):
                     price = sum(price_list)
-                    R.price = price
-                    if R.price < C.price or C.price == -1:
-                        C.price = R.price
+                    rxn.price = price
+                    if rxn.price < chem.price or chem.price == -1:
+                        chem.price = rxn.price
 
-        if sum(len(CTA.reactions) for tid,CTA in C.template_idx_results.items()) >= self.max_branching:
+        if sum(len(cta.reactions) for tid, cta in chem.template_idx_results.items()) >= self.max_branching:
             # print('{} hit max branching, checking if "done"'.format(chem_smi))
-            C.done = all([(R.done or (not R.valid)) for rsmi,R in CTA.reactions.items() for tid,CTA in C.template_idx_results.items()])
+            chem.done = all([(rxn.done or (not rxn.valid)) for tid, cta in chem.template_idx_results.items() for rsmi, rxn in cta.reactions.items()])
 
-        # if C.price != -1 and C.price < C.estimate_price:
-        #   C.estimate_price = C.price
+        # if chem.price != -1 and chem.price < chem.estimate_price:
+        #   chem.estimate_price = chem.price
 
-    def full_update(self, chem_smi, depth=0, path=[]):
+    def full_update(self, chem_smi, depth=0, path=None):
         """??
 
         Args:
@@ -705,51 +703,43 @@ class MCTS:
             depth (int, optional): (default: {0})
             path (list?): (default: {[]})
         """
-        C = self.Chemicals[chem_smi]
-        C.pathway_count = 0
+        path = path or []
+        chem = self.Chemicals[chem_smi]
+        chem.pathway_count = 0
 
-        if C.terminal:
-            C.pathway_count = 1
+        if chem.terminal:
+            chem.pathway_count = 1
             return
 
         if depth > self.max_depth:
             return
 
-        prefix = '    '* depth
-
-        for template_idx in C.template_idx_results:
-            CTA = C.template_idx_results[template_idx]
-            for reactants_smi in CTA.reactions:
-                R = CTA.reactions[reactants_smi]
-                R.pathway_count = 0
-                if (not R.valid) or len(set(R.reactant_smiles) & set(path)) > 0:
+        for template_idx in chem.template_idx_results:
+            cta = chem.template_idx_results[template_idx]
+            for reactants_smi in cta.reactions:
+                rxn = cta.reactions[reactants_smi]
+                rxn.pathway_count = 0
+                if (not rxn.valid) or len(set(rxn.reactant_smiles) & set(path)) > 0:
                     continue
-                for smi in R.reactant_smiles:
+                for smi in rxn.reactant_smiles:
                     self.full_update(smi, depth+1, path+[chem_smi])
-                price_list = [self.Chemicals[smi].price for smi in R.reactant_smiles]
+                price_list = [self.Chemicals[smi].price for smi in rxn.reactant_smiles]
                 if all([price != -1 for price in price_list]):
                     price = sum(price_list)
-                    R.price = price
-                    if R.price < C.price or C.price == -1:
-                        C.price = R.price
-                        C.best_template = template_idx
-                    R.pathway_count = np.prod([self.Chemicals[smi].pathway_count for smi in R.reactant_smiles])
-                    # if R.pathway_count != 0:
-                    #   print(prefix + '  Reac %d: '%template_idx + str(R.reactant_smiles) + ' %d paths'%R.pathway_count)
+                    rxn.price = price
+                    if rxn.price < chem.price or chem.price == -1:
+                        chem.price = rxn.price
+                        chem.best_template = template_idx
+                    rxn.pathway_count = np.prod([self.Chemicals[smi].pathway_count for smi in rxn.reactant_smiles])
                 else:
-                    R.pathway_count = 0
+                    rxn.pathway_count = 0
 
-                # print(prefix + str(R.reactant_smiles) + ' - %d' % R.pathway_count)
+        chem.pathway_count = 0
+        for tid,cta in chem.template_idx_results.items():
+            for rct_smi,rxn in cta.reactions.items():
+                chem.pathway_count += rxn.pathway_count
 
-        C.pathway_count = 0
-        for tid,CTA in C.template_idx_results.items():
-            for rct_smi,R in CTA.reactions.items():
-                C.pathway_count += R.pathway_count
-
-        # if C.pathway_count != 0:
-        #   print(prefix + chem_smi + ' %d paths, price: %.1f' % (C.pathway_count, C.price))
-
-    def build_tree(self, soft_stop=False, known_bad_reactions=[], forbidden_molecules=[], return_first=False):
+    def build_tree(self, soft_stop=False, known_bad_reactions=None, forbidden_molecules=None, return_first=False):
         """Builds retrosynthesis tree.
 
         Args:
@@ -762,6 +752,8 @@ class MCTS:
             return_first (bool, optional): Whether to return after finding first
                 pathway. (default: {False})
         """
+        known_bad_reactions = known_bad_reactions or []
+        forbidden_molecules = forbidden_molecules or []
         self.running = True
 
         with self.allow_join_result():
@@ -770,10 +762,10 @@ class MCTS:
             self.prepare()
 
             # Define first chemical node (target)
-            probs, indeces = self.get_initial_prioritization()
-            value = 1 # current value assigned to precursor (note: may replace with real value function)
+            probs, indices = self.get_initial_prioritization()
+            value = 1  # current value assigned to precursor (note: may replace with real value function)
             self.Chemicals[self.smiles] = Chemical(self.smiles)
-            self.Chemicals[self.smiles].set_template_relevance_probs(probs, indeces, value)
+            self.Chemicals[self.smiles].set_template_relevance_probs(probs, indices, value)
             MyLogger.print_and_log('Calculating initial probs for target', treebuilder_loc)
             hist = self.chemhistorian.lookup_smiles(self.smiles, alreadyCanonical=False)
             self.Chemicals[self.smiles].as_reactant = hist['as_reactant']
@@ -789,20 +781,23 @@ class MCTS:
             MyLogger.print_and_log('Set initial leaves for active pathways', treebuilder_loc)
 
             # Coordinate workers.
-            self.coordinate(soft_stop=soft_stop, known_bad_reactions=known_bad_reactions,
-                forbidden_molecules=forbidden_molecules, return_first=return_first)
+            self.coordinate(
+                soft_stop=soft_stop,
+                known_bad_reactions=known_bad_reactions,
+                forbidden_molecules=forbidden_molecules,
+                return_first=return_first
+            )
 
             # Do a final pass to get counts
             MyLogger.print_and_log('Doing final update of pathway counts / prices', treebuilder_loc)
             self.full_update(self.smiles)
-            C = self.Chemicals[self.smiles]
+            chem = self.Chemicals[self.smiles]
 
         print("Finished working.")
-        print("=== found %d pathways (overcounting duplicate templates)" % C.pathway_count)
+        print("=== found %d pathways (overcounting duplicate templates)" % chem.pathway_count)
         print("=== time for fist pathway: %.2fs" % self.time_for_first_path)
-        print("=== min price: %.1f" % C.price)
+        print("=== min price: %.1f" % chem.price)
         print("---------------------------")
-        return # self.Chemicals, C.pathway_count, self.time_for_first_path
 
     def get_initial_prioritization(self):
         """
@@ -819,19 +814,18 @@ class MCTS:
         Returns:
             (int, int):
                 num_chemicals (int): Number of chemical nodes in the tree.
-
                 num_reactions (int): Number of reaction nodes in the tree.
         """
-
         num_chemicals = len(self.Chemicals)
         num_reactions = len(self.status)
-        return (num_chemicals, num_reactions, [])
+        return num_chemicals, num_reactions, []
 
     def return_trees(self):
         """Returns retrosynthetic pathways trees and their size."""
 
-        def cheminfodict(smi):
-            """Returns dict of extra info about a given chemical.
+        def chem_info_dict(smi):
+            """
+            Returns dict of extra info about a given chemical.
 
             Args:
                 smi (str): SMILES string of chemical.
@@ -843,8 +837,9 @@ class MCTS:
                 'as_product': self.Chemicals[smi].as_product,
             }
 
-        def tidlisttoinfodict(tids):
-            """Returns dict of info from a given list of templates.
+        def tid_list_to_info_dict(tids):
+            """
+            Returns dict of info from a given list of templates.
 
                 Args:
                     tids (list of int): Template IDs to get info about.
@@ -895,25 +890,27 @@ class MCTS:
             return seen_chemsmiles[smi]
 
         def IDDFS():
-            """Performs iterative depth-first search to find buyable pathways.
+            """
+            Performs iterative depth-first search to find buyable pathways.
 
             Yields:
                 dict: nested dictionaries defining synthesis trees
             """
             print(len(self.Reactions.keys()))
             for path in DLS_chem(self.smiles, depth=0, headNode=True):
-                yield chem_dict(chemsmiles_to_id(self.smiles), children=path, **cheminfodict(self.smiles))
+                yield chem_dict(chemsmiles_to_id(self.smiles), children=path, **chem_info_dict(self.smiles))
 
         def DLS_chem(chem_smi, depth, headNode=False):
-            """Expands at a fixed depth for the current node ``chem_id``.
+            """
+            Expands at a fixed depth for the current node ``chem_id``.
 
             Args:
                 chem_smi (str): SMILES string for given chemical.
                 depth (int): Depth node is expanded at.
                 headNode (bool, optional): Unused. (default: {False})
             """
-            C = self.Chemicals[chem_smi]
-            if C.terminal:
+            chem = self.Chemicals[chem_smi]
+            if chem.terminal:
                 yield []
             if depth > self.max_depth:
                 return
@@ -922,23 +919,24 @@ class MCTS:
 
             # if depth > self.max_depth:
             #     return
-            for tid, CTA in C.template_idx_results.items():
+            for tid, cta in chem.template_idx_results.items():
                 ########??????????????????????????######################
-                if CTA.waiting:
+                if cta.waiting:
                     continue
-                for rct_smi, R in CTA.reactions.items():
-                    if (not R.valid) or R.price == -1:
+                for rct_smi, rxn in cta.reactions.items():
+                    if (not rxn.valid) or rxn.price == -1:
                         continue
-                    rxn_smiles = '.'.join(sorted(R.reactant_smiles)) + '>>' + chem_smi
+                    rxn_smiles = '.'.join(sorted(rxn.reactant_smiles)) + '>>' + chem_smi
                     if rxn_smiles not in done_children_of_this_chemical:  # necessary to avoid duplicates
                         for path in DLS_rxn(chem_smi, tid, rct_smi, depth):
                             yield [rxn_dict(rxnsmiles_to_id(rxn_smiles), rxn_smiles, children=path,
-                                            plausibility=R.plausibility, template_score=R.template_score,
-                                            **tidlisttoinfodict(R.tforms))]
+                                            plausibility=rxn.plausibility, template_score=rxn.template_score,
+                                            **tid_list_to_info_dict(rxn.tforms))]
                         done_children_of_this_chemical.append(rxn_smiles)
 
         def DLS_rxn(chem_smi, template_idx, rct_smi, depth):
-            """Yields children paths starting from a specific ``rxn_id``.
+            """
+            Yields children paths starting from a specific ``rxn_id``.
 
             Args:
                 chem_smi (str): SMILES string for given chemical.
@@ -947,10 +945,10 @@ class MCTS:
                 depth (int): depth of given reaction.
             """
             # TODO: add in auxiliary information about templates, etc.
-            R = self.Chemicals[chem_smi].template_idx_results[template_idx].reactions[rct_smi]
+            rxn = self.Chemicals[chem_smi].template_idx_results[template_idx].reactions[rct_smi]
 
             # rxn_list = []
-            # for smi in R.reactant_smiles:
+            # for smi in rxn.reactant_smiles:
             #     rxn_list.append([chem_dict(smi, children=path, **{}) for path in DLS_chem(smi, depth+1)])
 
             # return [rxns[0] for rxns in itertools.product(rxn_list)]
@@ -961,60 +959,60 @@ class MCTS:
             # well...
 
             # Only one reactant? easy!
-            if len(R.reactant_smiles) == 1:
-                chem_smi0 = R.reactant_smiles[0]
+            if len(rxn.reactant_smiles) == 1:
+                chem_smi0 = rxn.reactant_smiles[0]
                 for path in DLS_chem(chem_smi0, depth + 1):
                     yield [
-                        chem_dict(chemsmiles_to_id(chem_smi0), children=path, **cheminfodict(chem_smi0))
+                        chem_dict(chemsmiles_to_id(chem_smi0), children=path, **chem_info_dict(chem_smi0))
                     ]
 
             # Two reactants? want to capture all combinations of each node's
             # options
-            elif len(R.reactant_smiles) == 2:
-                chem_smi0 = R.reactant_smiles[0]
-                chem_smi1 = R.reactant_smiles[1]
+            elif len(rxn.reactant_smiles) == 2:
+                chem_smi0 = rxn.reactant_smiles[0]
+                chem_smi1 = rxn.reactant_smiles[1]
                 for path0 in DLS_chem(chem_smi0, depth + 1):
                     for path1 in DLS_chem(chem_smi1, depth + 1):
                         yield [
-                            chem_dict(chemsmiles_to_id(chem_smi0), children=path0, **cheminfodict(chem_smi0)),
-                            chem_dict(chemsmiles_to_id(chem_smi1), children=path1, **cheminfodict(chem_smi1)),
+                            chem_dict(chemsmiles_to_id(chem_smi0), children=path0, **chem_info_dict(chem_smi0)),
+                            chem_dict(chemsmiles_to_id(chem_smi1), children=path1, **chem_info_dict(chem_smi1)),
                         ]
 
             # Three reactants? This is not elegant...
-            elif len(R.reactant_smiles) == 3:
-                chem_smi0 = R.reactant_smiles[0]
-                chem_smi1 = R.reactant_smiles[1]
-                chem_smi2 = R.reactant_smiles[2]
+            elif len(rxn.reactant_smiles) == 3:
+                chem_smi0 = rxn.reactant_smiles[0]
+                chem_smi1 = rxn.reactant_smiles[1]
+                chem_smi2 = rxn.reactant_smiles[2]
                 for path0 in DLS_chem(chem_smi0, depth + 1):
                     for path1 in DLS_chem(chem_smi1, depth + 1):
                         for path2 in DLS_chem(chem_smi2, depth + 1):
                             yield [
-                                chem_dict(chemsmiles_to_id(chem_smi0), children=path0, **cheminfodict(chem_smi0)),
-                                chem_dict(chemsmiles_to_id(chem_smi1), children=path1, **cheminfodict(chem_smi1)),
-                                chem_dict(chemsmiles_to_id(chem_smi2), children=path2, **cheminfodict(chem_smi2)),
+                                chem_dict(chemsmiles_to_id(chem_smi0), children=path0, **chem_info_dict(chem_smi0)),
+                                chem_dict(chemsmiles_to_id(chem_smi1), children=path1, **chem_info_dict(chem_smi1)),
+                                chem_dict(chemsmiles_to_id(chem_smi2), children=path2, **chem_info_dict(chem_smi2)),
                             ]
 
             # I am ashamed
-            elif len(R.reactant_smiles) == 4:
-                chem_smi0 = R.reactant_smiles[0]
-                chem_smi1 = R.reactant_smiles[1]
-                chem_smi2 = R.reactant_smiles[2]
-                chem_smi3 = R.reactant_smiles[3]
+            elif len(rxn.reactant_smiles) == 4:
+                chem_smi0 = rxn.reactant_smiles[0]
+                chem_smi1 = rxn.reactant_smiles[1]
+                chem_smi2 = rxn.reactant_smiles[2]
+                chem_smi3 = rxn.reactant_smiles[3]
                 for path0 in DLS_chem(chem_smi0, depth + 1):
                     for path1 in DLS_chem(chem_smi1, depth + 1):
                         for path2 in DLS_chem(chem_smi2, depth + 1):
                             for path3 in DLS_chem(chem_smi3, depth + 1):
                                 yield [
-                                    chem_dict(chemsmiles_to_id(chem_smi0), children=path0, **cheminfodict(chem_smi0)),
-                                    chem_dict(chemsmiles_to_id(chem_smi1), children=path1, **cheminfodict(chem_smi1)),
-                                    chem_dict(chemsmiles_to_id(chem_smi2), children=path2, **cheminfodict(chem_smi2)),
-                                    chem_dict(chemsmiles_to_id(chem_smi3), children=path3, **cheminfodict(chem_smi3)),
+                                    chem_dict(chemsmiles_to_id(chem_smi0), children=path0, **chem_info_dict(chem_smi0)),
+                                    chem_dict(chemsmiles_to_id(chem_smi1), children=path1, **chem_info_dict(chem_smi1)),
+                                    chem_dict(chemsmiles_to_id(chem_smi2), children=path2, **chem_info_dict(chem_smi2)),
+                                    chem_dict(chemsmiles_to_id(chem_smi3), children=path3, **chem_info_dict(chem_smi3)),
                                 ]
 
             else:
                 print('Too many reactants! Only have cases 1-4 programmed')
                 print('There probably are not any real 5 component reactions')
-                print(R.reactant_smiles)
+                print(rxn.reactant_smiles)
 
         MyLogger.print_and_log('Retrieving trees...', treebuilder_loc)
         trees = []
@@ -1025,6 +1023,7 @@ class MCTS:
 
         # Sort by some metric
         def number_of_starting_materials(tree):
+            # TODO: Is `tree` a list or dict?!?
             if tree != []:
                 if tree['children']:
                     return sum(
@@ -1127,6 +1126,8 @@ class MCTS:
                 pathway. (default: {False})
             sort_trees_by (str, optional): Criteria used to sort trees.
                 (default: {'plausibility'})
+            template_prioritizer (str, optional): Specifies which template
+                prioritizer to use. (default: {'reaxys'})
             **kwargs: Additional optional arguments.
 
         Returns:

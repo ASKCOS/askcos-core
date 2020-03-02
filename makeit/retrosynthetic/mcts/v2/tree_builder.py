@@ -311,7 +311,7 @@ class MCTS:
         """
         while not all(self.initialized):
             MyLogger.print_and_log('Waiting for workers to initialize...', treebuilder_loc)
-            time.sleep(2)
+            time.sleep(5)
 
     def coordinate(self, soft_stop=False, known_bad_reactions=None, forbidden_molecules=None, return_first=False):
         """Coordinates workers.

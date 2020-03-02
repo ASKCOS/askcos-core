@@ -1111,11 +1111,11 @@ class MCTS:
             max_natom_dict (defaultdict, optional): Specifies maximum amounts
                 for certain atoms and the logic it should use to select a
                 chemical (buyable, buyable or max atoms, buyable and max atoms).
-                (default: {defaultdict(lambda: 1e9, {'logic': None})})
+                (default: None)
             min_chemical_history_dict (dict, optional): Minimum number of times
                 a chemical must appear as a reactant or product to be selected
                 when logic is "OR" and chemical is not buyable.
-                (default: {{'as_reactant':1e9, 'as_product':1e9,'logic':None}})
+                (default: None)
             apply_fast_filter (bool, optional): Whether to apply the fast
                 filter. (default: {True})
             filter_threshold (float, optional): Threshold to use for the fast
@@ -1148,65 +1148,23 @@ class MCTS:
         self.template_count = template_count
         self.filter_threshold = filter_threshold
         self.apply_fast_filter = apply_fast_filter
-        self.min_chemical_history_dict = min_chemical_history_dict
-        self.max_natom_dict = max_natom_dict
+
         self.max_ppg = max_ppg
+        self.max_natom_dict = max_natom_dict
+        self.min_chemical_history_dict = min_chemical_history_dict
+
         self.sort_trees_by = sort_trees_by
         self.template_prioritizer = template_prioritizer
 
         known_bad_reactions = known_bad_reactions or []
         forbidden_molecules = forbidden_molecules or []
-        max_natom_dict = max_natom_dict or defaultdict(lambda: 1e9, {'logic': None})
-        min_chemical_history_dict = min_chemical_history_dict or {'as_reactant': 1e9, 'as_product': 1e9, 'logic': None}
 
         MyLogger.print_and_log('Active pathway #: {}'.format(num_active_pathways), treebuilder_loc)
 
-        if min_chemical_history_dict['logic'] not in [None, 'none'] and self.chemhistorian is None:
+        if (self.min_chemical_history_dict is not None
+                and self.min_chemical_history_dict['logic'] not in [None, 'none']
+                and self.chemhistorian is None):
             self.chemhistorian = self.load_chemhistorian()
-
-        # Define stop criterion
-        def is_buyable(ppg):
-            return ppg and (ppg <= self.max_ppg)
-
-        def is_small_enough(smiles):
-            # Get structural properties
-            natom_dict = defaultdict(lambda: 0)
-            mol = Chem.MolFromSmiles(smiles)
-            if not mol:
-                return False
-            for a in mol.GetAtoms():
-                natom_dict[a.GetSymbol()] += 1
-            natom_dict['H'] = sum(a.GetTotalNumHs() for a in mol.GetAtoms())
-            max_natom_satisfied = all(natom_dict[k] <= v for (
-                k, v) in max_natom_dict.items() if k != 'logic')
-            return max_natom_satisfied
-
-        def is_popular_enough(hist):
-            return hist['as_reactant'] >= min_chemical_history_dict['as_reactant'] or \
-                   hist['as_product'] >= min_chemical_history_dict['as_product']
-
-        if min_chemical_history_dict['logic'] in [None, 'none']:
-            if max_natom_dict['logic'] in [None, 'none']:
-                def is_a_terminal_node(smiles, ppg, hist):
-                    return is_buyable(ppg)
-            elif max_natom_dict['logic'] == 'or':
-                def is_a_terminal_node(smiles, ppg, hist):
-                    return is_buyable(ppg) or is_small_enough(smiles)
-            else:
-                def is_a_terminal_node(smiles, ppg, hist):
-                    return is_buyable(ppg) and is_small_enough(smiles)
-        else:
-            if max_natom_dict['logic'] in [None, 'none']:
-                def is_a_terminal_node(smiles, ppg, hist):
-                    return is_buyable(ppg) or is_popular_enough(hist)
-            elif max_natom_dict['logic'] == 'or':
-                def is_a_terminal_node(smiles, ppg, hist):
-                    return is_buyable(ppg) or is_popular_enough(hist) or is_small_enough(smiles)
-            else:
-                def is_a_terminal_node(smiles, ppg, hist):
-                    return is_popular_enough(hist) or (is_buyable(ppg) and is_small_enough(smiles))
-
-        self.is_a_terminal_node = is_a_terminal_node
 
         self.reset(soft_reset=soft_reset)
 
@@ -1218,6 +1176,52 @@ class MCTS:
                         )
 
         return self.return_trees()
+
+    def is_a_terminal_node(self, smiles, ppg, hist):
+        """
+        Determine if the specified chemical is a terminal node in the tree based
+        on pre-specified criteria.
+
+        The current setup uses ppg as a mandatory criteria, with atom counts and
+        chemical history data being optional, additional criteria.
+
+        Args:
+            smiles (str): smiles string of the chemical
+            ppg (float): cost of the chemical
+            hist (dict): historian data for the chemical
+        """
+        # Default to False
+        is_terminal = False
+
+        if self.max_ppg is not None:
+            is_buyable = ppg and (ppg <= self.max_ppg)
+            is_terminal = is_buyable
+
+        if self.max_natom_dict is not None:
+            # Get structural properties
+            mol = Chem.MolFromSmiles(smiles)
+            if mol:
+                natom_dict = defaultdict(lambda: 0)
+                for a in mol.GetAtoms():
+                    natom_dict[a.GetSymbol()] += 1
+                natom_dict['H'] = sum(a.GetTotalNumHs() for a in mol.GetAtoms())
+                is_small_enough = all(natom_dict[k] <= v for k, v in self.max_natom_dict.items() if k != 'logic')
+
+                if self.max_natom_dict['logic'] == 'or':
+                    is_terminal = is_terminal or is_small_enough
+                elif self.max_natom_dict['logic'] == 'and':
+                    is_terminal = is_terminal and is_small_enough
+
+        if self.min_chemical_history_dict is not None:
+            is_popular_enough = hist['as_reactant'] >= self.min_chemical_history_dict['as_reactant'] or \
+                                hist['as_product'] >= self.min_chemical_history_dict['as_product']
+
+            if self.min_chemical_history_dict['logic'] == 'or':
+                is_terminal = is_terminal or is_popular_enough
+            elif self.min_chemical_history_dict['logic'] == 'and':
+                is_terminal = is_terminal and is_popular_enough
+
+        return is_terminal
 
     def return_chemical_results(self):
         results = defaultdict(list)

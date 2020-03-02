@@ -96,10 +96,20 @@ class MCTS:
         self.max_branching = max_branching
         self.expansion_time = expansion_time
         self.nproc = nproc
-        self.max_cum_template_prob = 1
         self.sort_trees_by = 'plausibility'
 
         self.num_active_pathways = num_active_pathways or self.nproc
+
+        # Initialize other class attributes, these are set by `get_buyable_paths`
+        self.smiles = None
+        self.max_trees = None
+        self.max_cum_template_prob = None
+        self.template_count = None
+        self.filter_threshold = None
+        self.apply_fast_filter = None
+        self.max_ppg = None
+        self.max_natom_dict = None
+        self.min_chemical_history_dict = None
 
         # Load data and models
         self.pricer = pricer or self.load_pricer()
@@ -114,8 +124,6 @@ class MCTS:
 
         # Initialize vars, reset dicts, etc.
         self.reset(soft_reset=False)
-
-        self.status = {}
 
         from makeit.utilities.with_dummy import with_dummy
         self.allow_join_result = with_dummy

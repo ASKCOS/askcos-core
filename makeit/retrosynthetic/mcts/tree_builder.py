@@ -515,7 +515,7 @@ class MCTS:
 
             self.idle[i] = True
 
-    def UCB(self, chem_smi, c_exploration=0.2, path=None):
+    def UCB(self, chem_smi, c_exploration=1., path=None):
         """
         Finds best reaction for a given chemical. Variation of upper confidence
         bound for trees.
@@ -526,7 +526,7 @@ class MCTS:
 
         Args:
             chem_smi (str): SMILES string of target chemical.
-            c_exploration (float, optional): weight for exploration. (default: {0.2})
+            c_exploration (float, optional): weight for exploration. (default: {1.})
             path (list or dict, optional): Current reaction path. (default: {[]})
 
         Returns:

@@ -116,6 +116,7 @@ class MCTS:
         self.chemhistorian = chemhistorian or self.load_chemhistorian(kwargs.get('use_db', False),
                                                                       kwargs.get('hashed', True))
         self.retroTransformer = retroTransformer or self.load_retro_transformer(
+            use_db=kwargs.get('use_db', False),
             template_set=template_set,
             precursor_prioritizer=precursor_prioritizer,
         )
@@ -148,11 +149,12 @@ class MCTS:
         return chemhistorian
 
     @staticmethod
-    def load_retro_transformer(template_set='reaxys', precursor_prioritizer='relevanceheuristic'):
+    def load_retro_transformer(use_db, template_set='reaxys', precursor_prioritizer='relevanceheuristic'):
         """
         Loads retro transformer model.
         """
         retro_transformer = RetroTransformer(
+            use_db=use_db,
             template_set=template_set,
             template_prioritizer=None,
             precursor_prioritizer=precursor_prioritizer,

@@ -43,8 +43,9 @@ class MCTS:
     transformer additionally needs the precursor prioritizer and fast filter.
     If instantiating this class with no arguments, the defaults will be loaded
     for all of these. Otherwise, Pricer, ChemHistorian, and RetroTransformer
-    instances can be passed during initiation. The template prioritizer
-    should be included as part of the RetroTransformer.
+    instances can be passed during initiation. The RetroTransformer should not
+    include the template prioritizer or fast filter models as they need to be
+    independently loaded by the children processes.
 
     Attributes:
 

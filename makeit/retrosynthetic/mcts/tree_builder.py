@@ -112,8 +112,9 @@ class MCTS:
         self.min_chemical_history_dict = None
 
         # Load data and models
-        self.pricer = pricer or self.load_pricer()
-        self.chemhistorian = chemhistorian or self.load_chemhistorian()
+        self.pricer = pricer or self.load_pricer(kwargs.get('use_db', False))
+        self.chemhistorian = chemhistorian or self.load_chemhistorian(kwargs.get('use_db', False),
+                                                                      kwargs.get('hashed', True))
         self.retroTransformer = retroTransformer or self.load_retro_transformer(
             template_set=template_set,
             precursor_prioritizer=precursor_prioritizer,
@@ -129,20 +130,20 @@ class MCTS:
         self.allow_join_result = with_dummy
 
     @staticmethod
-    def load_pricer():
+    def load_pricer(use_db):
         """
         Loads pricer.
         """
-        pricer = Pricer(use_db=False)
+        pricer = Pricer(use_db=use_db)
         pricer.load()
         return pricer
 
     @staticmethod
-    def load_chemhistorian():
+    def load_chemhistorian(use_db, hashed):
         """
         Loads chemhistorian.
         """
-        chemhistorian = ChemHistorian(use_db=False, hashed=True)
+        chemhistorian = ChemHistorian(use_db=use_db, hashed=hashed)
         chemhistorian.load()
         return chemhistorian
 
@@ -1172,7 +1173,7 @@ class MCTS:
         if (self.min_chemical_history_dict is not None
                 and self.min_chemical_history_dict['logic'] not in [None, 'none']
                 and self.chemhistorian is None):
-            self.chemhistorian = self.load_chemhistorian()
+            self.chemhistorian = self.load_chemhistorian(kwargs.get('use_db', False), kwargs.get('hashed', True))
 
         self.reset(soft_reset=soft_reset)
 

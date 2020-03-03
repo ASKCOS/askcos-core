@@ -3,23 +3,6 @@ import unittest
 
 import makeit.global_config as gc
 import makeit.retrosynthetic.transformer as retro_trans
-import makeit.retrosynthetic.tree_builder as retro_tree
-
-
-@unittest.skip('Non-deterministic')
-class TestTreeBuilder(unittest.TestCase):
-    def test_01_get_buyable_paths(self):
-        tree_builder = retro_tree.TreeBuilder(celery=False, mincount=25, mincount_chiral=10)
-        status_result, paths_result = tree_builder.get_buyable_paths(
-            'CN1C2CCC1CC(OC(=O)C(CO)c1ccccc1)C2', max_depth=4, template_prioritization=gc.relevance,
-            precursor_prioritization=gc.relevanceheuristic, nproc=2, expansion_time=60, max_trees=500, max_ppg=10,
-            max_branching=25, apply_fast_filter=True, filter_threshold=0.75,
-            min_chemical_history_dict={'as_reactant': 5, 'as_product': 1, 'logic': 'none'}
-        )
-        expected_status = (28, 25, {0: 1, 0.5: 25, 1: 27})
-        expected_paths = [{'smiles': 'CN1C2CCC1CC(OC(=O)C(CO)c1ccccc1)C2', 'ppg': 6.0, 'as_product': 17, 'as_reactant': 36, 'children': [], 'is_chemical': True, 'id': 1}, {'smiles': 'CN1C2CCC1CC(OC(=O)C(CO)c1ccccc1)C2', 'ppg': 6.0, 'as_product': 17, 'as_reactant': 36, 'children': [{'smiles': 'CN1C2CCC1CC(O)C2.O=C(O)C(CO)c1ccccc1>>CN1C2CCC1CC(OC(=O)C(CO)c1ccccc1)C2', 'is_reaction': True, 'necessary_reagent': u'', 'children': [{'smiles': 'CN1C2CCC1CC(O)C2', 'ppg': 1.0, 'as_product': 61, 'as_reactant': 112, 'children': [], 'is_chemical': True, 'id': 3}, {'smiles': 'O=C(O)C(CO)c1ccccc1', 'ppg': 3.0, 'as_product': 75, 'as_reactant': 265, 'children': [], 'is_chemical': True, 'id': 4}], 'plausibility': 0.9999294281005859, 'template_score': 0.01923198811709881, 'score': -0.2079868173610025, 'num_examples': 19578, 'tforms': ['59c5118c05581eb9f5753c8c', '59c5118c05581eb9f5753c9b', '59c511b905581eb9f5756604'], 'id': 2, 'template': '59c5118c05581eb9f5753c8c'}], 'is_chemical': True, 'id': 1}]
-        self.assertEqual(expected_status, status_result)
-        self.assertEqual(expected_paths, paths_result)
 
 
 @unittest.skip('Work-in-progress')

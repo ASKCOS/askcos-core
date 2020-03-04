@@ -22,3 +22,8 @@ ENV LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:"/usr/local/rdkit-2019-03/lib"
 ENV PYTHONPATH=${PYTHONPATH}:/usr/local/rdkit-2019-03:/usr/local/ASKCOS:/usr/local/ASKCOS/askcos/
 
 RUN python /usr/local/ASKCOS/askcos/manage.py collectstatic --noinput
+
+LABEL version={VERSION} \
+      git.hash={GIT_HASH} \
+      git.date={GIT_DATE} \
+      git.describe={GIT_DESCRIBE}

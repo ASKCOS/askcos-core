@@ -65,26 +65,20 @@ class Pricer:
         """
         Write prices to a local file
         """
-        prices = []
-        for k, v in self.prices.items():
-            tmp = v.copy()
-            tmp['smiles'] = k
-            prices.append(tmp)
+        prices = [{'smiles': s, 'ppg': p} for s, p in self.prices.items()]
 
-        with gzip.open(file_path, 'wb') as f:
+        with gzip.open(file_path, 'wt', encoding='utf-8') as f:
             json.dump(prices, f)
 
     def load_from_file(self, file_name):
         """
         Load buyables information from local file
         """
-        with gzip.open(file_name, 'rb') as f:
-            prices = json.loads(f.read().decode('utf-8'))
+        with gzip.open(file_name, 'rt', encoding='utf-8') as f:
+            prices = json.load(f)
 
-        for p in prices:
-            smiles = p.pop('smiles', '')
-            if smiles:
-                self.prices[smiles] = p.pop('ppg')
+        self.prices.update({p['smiles']: p['ppg'] for p in prices if p.get('smiles')})
+
         MyLogger.print_and_log('Loaded prices from flat file', pricer_loc)
 
     def lookup_smiles(self, smiles, alreadyCanonical=False, isomericSmiles=True):

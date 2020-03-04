@@ -1281,74 +1281,8 @@ if __name__ == '__main__':
                                            template_count=100,
                                            # min_chemical_history_dict={'as_reactant':5, 'as_product':5,'logic':'none'},
                                            soft_reset=False,
-                                           soft_stop=True)
+                                           soft_stop=False)
     print(status)
     for path in paths[:5]:
         print(path)
     print('Total num paths: {}'.format(len(paths)))
-    quit(1)
-
-    ####################################################################################
-    ############################# DEBUGGING ############################################
-    ####################################################################################
-
-    smiles = 'CCCCCN(CCCCC)CCCC(=O)OCCC'
-    import rdkit.Chem as Chem
-    smiles = Chem.MolToSmiles(Chem.MolFromSmiles(smiles), True)
-    status, paths = tree.get_buyable_paths(smiles,
-                                           nproc=n_procs,
-                                           expansion_time=simulation_time,
-                                           max_cum_template_prob=0.995,
-                                           template_count=100,
-                                           soft_reset=False,
-                                           soft_stop=True)
-    print(status)
-    for path in paths[:5]:
-        print(path)
-    print('Total num paths: {}'.format(len(paths)))
-    quit(1)
-
-    ####################################################################################
-    ############################# TESTING ##############################################
-    ####################################################################################
-
-    f = open(os.path.join(os.path.dirname(__file__), 'test_smiles.txt'))
-    N = 500
-    smiles_list = [line.strip().split('.')[0] for line in f]
-
-    # ########### STAGE 1 - PROCESS ALL CHEMICALS
-    with open('chemicals.pkl', 'wb') as fid:
-        for _id, smiles in enumerate(smiles_list[:N]):
-            smiles = Chem.MolToSmiles(Chem.MolFromSmiles(smiles), True)
-            status, paths = tree.get_buyable_paths(smiles,
-                                                   nproc=n_procs,
-                                                   expansion_time=simulation_time,
-                                                   soft_reset=True,
-                                                   soft_stop=True)
-            if len(paths) > 0:
-                print(paths[0])
-            pickle.dump((tree.Chemicals, tree.time_for_first_path, paths), fid)
-
-    ########### STAGE 2 - ANALYZE RESULTS
-    success = 0
-    total = 0
-    first_time = []
-    pathway_count = []
-    min_price = []
-    with open('chemicals.pkl', 'rb') as fid:
-        for _id, smiles in enumerate(smiles_list[:N]):
-            smiles = Chem.MolToSmiles(Chem.MolFromSmiles(smiles), True)
-            (Chemicals, ftime, paths) = pickle.load(fid)
-
-            total += 1
-            if Chemicals[smiles].price != -1:
-                success += 1
-                first_time.append(ftime)
-                pathway_count.append(len(paths))
-                min_price.append(Chemicals[smiles].price)
-
-        print('After looking at chemical index {}'.format(_id))
-        print('Success ratio: %f (%d/%d)' % (float(success)/total, success, total))
-        print('average time for first pathway: %f' % np.mean(first_time))
-        print('average number of pathways:     %f' % np.mean(pathway_count))
-        print('average minimum price:          %f' % np.mean(min_price))

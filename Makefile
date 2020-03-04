@@ -6,7 +6,7 @@
 
 .PHONY: build debug push test
 
-VERSION := dev
+VERSION ?= dev
 GIT_HASH := $(shell git log -1 --format='format:%H')
 GIT_DATE := $(shell git log -1 --format='format:%cs')
 GIT_DESCRIBE := $(shell git describe --tags --always --dirty)

@@ -13,20 +13,20 @@ before_script:
 build-dev:  # build dev branch for continuous deployment
   stage: build
   script:
-    - make push REGISTRY=$CI_REGISTRY_IMAGE TAG=dev
+    - make push VERSION=$(git describe --tags --always) REGISTRY=$CI_REGISTRY_IMAGE TAG=dev
   only:
     - dev
 
 build-latest:  # build latest version of the master branch
   stage: build
   script:
-    - make push REGISTRY=$CI_REGISTRY_IMAGE TAG=latest
+    - make push VERSION=$(git describe --tags --abbrev=0) REGISTRY=$CI_REGISTRY_IMAGE TAG=latest
   only:
     - master
 
 build-release:  # build all releases, as determined by tags
   stage: build
   script:
-    - make push REGISTRY=$CI_REGISTRY_IMAGE TAG=$CI_COMMIT_TAG
+    - make push VERSION=$CI_COMMIT_TAG REGISTRY=$CI_REGISTRY_IMAGE TAG=$CI_COMMIT_TAG
   only:
     - tags

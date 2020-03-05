@@ -27,21 +27,17 @@ class Pricer:
     def load(self, file_name=gc.BUYABLES['file_name']):
         """
         Load pricer information. Either create connection to MongoDB or load from local file.
-        If connection to MongoDB cannot be made, fallback and try to load from local file.
         """
         if self.use_db:
-            self.load_databases()
-            return
+            self.load_databases(file_name)
+        else:
+            self.load_from_file(file_name)
 
-        if not os.path.isfile(file_name):
-            MyLogger.print_and_log('Buyables file does not exist file: {}'.format(file_name), pricer_loc)
-            return
-
-        self.load_from_file(file_name)
-
-    def load_databases(self):
+    def load_databases(self, file_name=gc.BUYABLES['file_name']):
         """
         Load the pricing data from the online database
+
+        If connection to MongoDB cannot be made, fallback and try to load from local file.
         """
         db_client = MongoClient(
             gc.MONGO['path'],
@@ -55,11 +51,10 @@ class Pricer:
         except errors.ServerSelectionTimeoutError:
             MyLogger.print_and_log('Cannot connect to mongodb to load prices', pricer_loc)
             self.use_db = False
-            self.load()
-            return
-
-        db = db_client[gc.BUYABLES['database']]
-        self.BUYABLES_DB = db[gc.BUYABLES['collection']]
+            self.load(file_name=file_name)
+        else:
+            db = db_client[gc.BUYABLES['database']]
+            self.BUYABLES_DB = db[gc.BUYABLES['collection']]
 
     def dump_to_file(self, file_path):
         """
@@ -74,12 +69,15 @@ class Pricer:
         """
         Load buyables information from local file
         """
-        with gzip.open(file_name, 'rt', encoding='utf-8') as f:
-            prices = json.load(f)
+        if os.path.isfile(file_name):
+            with gzip.open(file_name, 'rt', encoding='utf-8') as f:
+                prices = json.load(f)
 
-        self.prices.update({p['smiles']: p['ppg'] for p in prices if p.get('smiles')})
+            self.prices.update({p['smiles']: p['ppg'] for p in prices if p.get('smiles')})
 
-        MyLogger.print_and_log('Loaded prices from flat file', pricer_loc)
+            MyLogger.print_and_log('Loaded prices from flat file', pricer_loc)
+        else:
+            MyLogger.print_and_log('Buyables file does not exist: {}'.format(file_name), pricer_loc)
 
     def lookup_smiles(self, smiles, alreadyCanonical=False, isomericSmiles=True):
         """

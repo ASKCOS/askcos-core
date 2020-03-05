@@ -44,6 +44,21 @@ class TestPricer(unittest.TestCase):
 
         os.remove(filename)
 
+    def test_db_fallback(self):
+        """Test that we load from file if db is not available."""
+        filename = 'temp.json.gz'
+        self.pricer.dump_to_file(filename)
+        self.assertTrue(os.path.isfile(filename))
+
+        new_pricer = Pricer(use_db=True)
+        new_pricer.load(filename)
+
+        self.assertFalse(new_pricer.use_db)
+        self.assertIsNone(new_pricer.BUYABLES_DB)
+        self.assertEqual(self.pricer.prices, new_pricer.prices)
+
+        os.remove(filename)
+
 
 if __name__ == '__main__':
     res = unittest.main(verbosity=3, exit=False)

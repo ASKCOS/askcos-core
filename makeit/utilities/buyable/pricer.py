@@ -18,7 +18,7 @@ class Pricer:
     are buyable.
     """
 
-    def __init__(self, use_db=False, BUYABLES_DB=None):
+    def __init__(self, use_db=True, BUYABLES_DB=None):
 
         self.BUYABLES_DB = BUYABLES_DB
         self.use_db = use_db

@@ -10,7 +10,7 @@ class TestPricer(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """This method is run once before every test in this module."""
-        cls.pricer = Pricer()
+        cls.pricer = Pricer(use_db=False)
         # Set some arbitrary prices
         cls.pricer.prices['CCCCCO'] = 1.0
         cls.pricer.prices['c1ccccc1'] = 2.0

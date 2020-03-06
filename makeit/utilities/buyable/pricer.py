@@ -98,10 +98,7 @@ class Pricer:
                 'smiles': smiles,
                 'source': {'$ne': 'LN'}
             })
-            if cursor.count():
-                return min([doc['ppg'] for doc in cursor])
-            else:
-                return 0.
+            return min([doc['ppg'] for doc in cursor], default=0.0)
         else:
             return self.prices[smiles]
 

@@ -2,7 +2,27 @@ import gzip
 import os
 import unittest
 
+from pymongo import MongoClient, collection, errors
+
+import makeit.global_config as gc
 from makeit.utilities.buyable.pricer import Pricer
+
+
+def db_available():
+    """Check if a mongo db instance is available."""
+    db_client = MongoClient(
+        gc.MONGO['path'],
+        gc.MONGO['id'],
+        connect=gc.MONGO['connect'],
+        serverSelectionTimeoutMS=1000,
+    )
+
+    try:
+        db_client.server_info()
+    except errors.ServerSelectionTimeoutError:
+        return False
+    else:
+        return True
 
 
 class TestPricer(unittest.TestCase):
@@ -44,6 +64,7 @@ class TestPricer(unittest.TestCase):
 
         os.remove(filename)
 
+    @unittest.skipIf(db_available(), 'Skipping because mongo db is available.')
     def test_db_fallback(self):
         """Test that we load from file if db is not available."""
         filename = 'temp.json.gz'
@@ -58,6 +79,18 @@ class TestPricer(unittest.TestCase):
         self.assertEqual(self.pricer.prices, new_pricer.prices)
 
         os.remove(filename)
+
+    @unittest.skipIf(not db_available(), 'Skipping because mongo db is not available.')
+    def test_db_lookup(self):
+        """Test that we can load pricing data from mongo db."""
+        new_pricer = Pricer(use_db=True)
+        new_pricer.load()
+
+        self.assertFalse(new_pricer.prices)  # prices should be empty
+        self.assertTrue(new_pricer.BUYABLES_DB)
+        self.assertIsInstance(new_pricer.BUYABLES_DB, collection.Collection)
+
+        self.assertEqual(new_pricer.lookup_smiles('CCCCCO'), 1.0)
 
 
 if __name__ == '__main__':

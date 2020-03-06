@@ -43,7 +43,13 @@ class TestPricer(unittest.TestCase):
 
     def test_lookup_nonexisting_smiles(self):
         """Test that we can lookup a SMILES that does not exist."""
-        result = self.pricer.lookup_smiles('CCCCXCCO')
+        result = self.pricer.lookup_smiles('CCCCCN')
+        expected = 0.0
+        self.assertAlmostEqual(expected, result)
+
+    def test_lookup_invalid_smiles(self):
+        """Test that we can lookup an invalid SMILES."""
+        result = self.pricer.lookup_smiles('CCCCCX')
         expected = 0.0
         self.assertAlmostEqual(expected, result)
 
@@ -91,6 +97,18 @@ class TestPricer(unittest.TestCase):
         self.assertIsInstance(new_pricer.BUYABLES_DB, collection.Collection)
 
         self.assertEqual(new_pricer.lookup_smiles('CCCCCO'), 1.0)
+
+    @unittest.skipIf(not db_available(), 'Skipping because mongo db is not available.')
+    def test_db_lookup_nonexisting(self):
+        """Test that we can return price for chemical not in mongo db."""
+        new_pricer = Pricer(use_db=True)
+        new_pricer.load()
+
+        self.assertFalse(new_pricer.prices)  # prices should be empty
+        self.assertTrue(new_pricer.BUYABLES_DB)
+        self.assertIsInstance(new_pricer.BUYABLES_DB, collection.Collection)
+
+        self.assertEqual(new_pricer.lookup_smiles('C#C'), 0.0)
 
 
 if __name__ == '__main__':

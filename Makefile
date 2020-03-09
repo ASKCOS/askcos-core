@@ -27,7 +27,7 @@ push: build
 	@docker push $(REGISTRY):$(TAG)
 
 debug:
-	docker run -it -w /usr/local/ASKCOS $(VOLUMES) $(REGISTRY):$(TAG) /bin/bash
+	docker run -it --rm -w /usr/local/ASKCOS $(VOLUMES) $(REGISTRY):$(TAG) /bin/bash
 
 test:
 	docker run -w /usr/local/ASKCOS $(VOLUMES) $(REGISTRY):$(TAG) /bin/bash -c "python -m unittest discover -v -p '*test.py' -s makeit"

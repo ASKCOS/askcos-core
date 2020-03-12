@@ -430,7 +430,7 @@ class MCTS:
                             ppg = self.pricer.lookup_smiles(smi, alreadyCanonical=True)
                             self.Chemicals[smi].purchase_price = ppg
 
-                            hist = self.chemhistorian.lookup_smiles(smi, alreadyCanonical=True)
+                            hist = self.chemhistorian.lookup_smiles(smi, alreadyCanonical=True, template_set=self.template_set)
                             self.Chemicals[smi].as_reactant = hist['as_reactant']
                             self.Chemicals[smi].as_product = hist['as_product']
 

@@ -430,7 +430,7 @@ class MCTS:
                             ppg = self.pricer.lookup_smiles(smi, alreadyCanonical=True)
                             self.Chemicals[smi].purchase_price = ppg
 
-                            hist = self.chemhistorian.lookup_smiles(smi, alreadyCanonical=True)
+                            hist = self.chemhistorian.lookup_smiles(smi, alreadyCanonical=True, template_set=self.template_set)
                             self.Chemicals[smi].as_reactant = hist['as_reactant']
                             self.Chemicals[smi].as_product = hist['as_product']
 
@@ -507,6 +507,7 @@ class MCTS:
                             _id, smiles, template_idx,
                             template_prioritizer=template_prioritizer,
                             fast_filter=fast_filter,
+                            template_set=self.template_set
                         )
                     except Exception as e:
                         print(e)
@@ -1090,6 +1091,7 @@ class MCTS:
                           return_first=False,
                           sort_trees_by='plausibility',
                           template_prioritizer='reaxys',
+                          template_set='reaxys',
                           **kwargs):
         """Returns trees with path ending in buyable chemicals.
 
@@ -1167,6 +1169,7 @@ class MCTS:
 
         self.sort_trees_by = sort_trees_by
         self.template_prioritizer = template_prioritizer
+        self.template_set = template_set
 
         known_bad_reactions = known_bad_reactions or []
         forbidden_molecules = forbidden_molecules or []

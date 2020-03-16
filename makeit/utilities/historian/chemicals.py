@@ -108,7 +108,7 @@ class ChemHistorian:
 
         MyLogger.print_and_log('Historian is fully loaded.', historian_loc)
 
-    def lookup_smiles(self, smiles, alreadyCanonical=False, isomericSmiles=True):
+    def lookup_smiles(self, smiles, alreadyCanonical=False, isomericSmiles=True, template_set='reaxys', hashed=None):
         """Looks up number of occurances by SMILES.
 
         Tries it as-entered and then re-canonicalizes it in RDKit unless the
@@ -131,6 +131,9 @@ class ChemHistorian:
             ValueError: If isomericSmiles is False.
         """
 
+        if hashed is None:
+            hashed = self.hashed
+
         default_result = {
             'as_reactant': 0,
             'as_product': 0
@@ -145,15 +148,13 @@ class ChemHistorian:
                 return default_result
             smiles = Chem.MolToSmiles(mol, isomericSmiles=isomericSmiles)
 
-        if self.hashed:
+        if hashed:
             smiles = str(int(hashlib.md5(smiles.encode('utf-8')).hexdigest(), 16))
-
-        return_fields = {'as_reactant': 1, 'as_product': 1}
 
         if self.use_db:
             doc = self.CHEMICALS_DB.find_one(
-                {'smiles': smiles}, 
-                return_fields
+                {'smiles': smiles, 'template_set': template_set}, 
+                {'as_reactant': 1, 'as_product': 1}
             )
             if doc:
                 return doc

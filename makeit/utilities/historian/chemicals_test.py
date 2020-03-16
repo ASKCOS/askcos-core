@@ -22,10 +22,11 @@ def db_available():
 
 class TestChemHistorian(unittest.TestCase):
 
-    def setUp(self):
+    @classmethod
+    def setUpClass(cls):
         """This method is run once before each test in this class."""
-        self.chemhistorian = ChemHistorian(hashed=True)
-        self.chemhistorian.load()
+        cls.chemhistorian = ChemHistorian(hashed=True)
+        cls.chemhistorian.load()
 
     def test_01_lookup_smiles(self):
         """Test that we can look up a SMILES string in chemhistorian."""
@@ -43,15 +44,17 @@ class TestChemHistorian(unittest.TestCase):
 @unittest.skipIf(not db_available(), 'Skipping because mongo db is not available.')
 class TestDBChemHistorian(unittest.TestCase):
 
-    def setUp(self):
+    @classmethod
+    def setUpClass(cls):
         """This method is run once before each test in this class."""
-        self.chemhistorian = ChemHistorian(use_db=True, hashed=True)
-        self.chemhistorian.load()
-        self.new_doc = {'_id': 'test_id','smiles': 'CCCCO', 'as_product': 1, 'as_reactant': 1, 'template_set': 'test_template_set'}
+        cls.chemhistorian = ChemHistorian(use_db=True, hashed=True)
+        cls.chemhistorian.load()
+        cls.new_doc = {'_id': 'test_id','smiles': 'CCCCO', 'as_product': 1, 'as_reactant': 1, 'template_set': 'test_template_set'}
 
-    def tearDown(self):
+    @classmethod
+    def tearDownClass(cls):
         """This is run after each test in this class."""
-        self.chemhistorian.CHEMICALS_DB.delete_one(self.new_doc)
+        cls.chemhistorian.CHEMICALS_DB.delete_one(cls.new_doc)
 
     def test_01_lookup_smiles(self):
         """Test that we can look up a SMILES string in chemhistorian."""

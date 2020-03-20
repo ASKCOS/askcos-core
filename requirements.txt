@@ -10,6 +10,7 @@ gevent==1.4.0
 h5py==2.10.0
 hdbscan==0.8.23
 keras==2.2.4
+Markdown==3.2.1
 matplotlib==3.0.3
 mysqlclient==1.4.5
 numpy==1.17.4

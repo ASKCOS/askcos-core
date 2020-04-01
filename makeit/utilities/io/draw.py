@@ -121,7 +121,7 @@ def defaultDrawOptions():
     opts.wedgeBonds = True
 
     opts.elemDict = defaultdict(lambda: (0, 0, 0))
-    opts.dotsPerAngstrom = 20
+    opts.dotsPerAngstrom = 30
     opts.bondLineWidth = 1.5
     atomLabelFontFace = 'arial'
 
@@ -444,7 +444,7 @@ def TransformStringToImage(transform, retro=True, **kwargs):
     """
 
     options = defaultDrawOptions()
-    options.dotsPerAngstrom = 40
+    options.dotsPerAngstrom = 60
 
     # To generalize un-mapped atoms in transform, need to identify square brackets
     # without colon in the middle (e.g., [C]) and replace with dummy label [C:0] so

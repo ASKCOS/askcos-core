@@ -13,6 +13,7 @@ import os
 import re
 import io
 
+rdDepictor.SetPreferCoordGen(True)
 
 
 def get_scaled_drawer(mol):

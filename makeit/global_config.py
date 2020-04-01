@@ -1,5 +1,4 @@
 import os
-time_zero = 0
 
 # Output debugging statements
 DEBUG = False

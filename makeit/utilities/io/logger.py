@@ -3,13 +3,25 @@ import time
 import makeit.global_config as gc
 
 
+def select_log_path():
+    """Select a location for the log file."""
+    filename = 'askcos.log'
+    log_path = os.path.join(os.path.expanduser('~'), filename)
+
+    try:
+        open(log_path, 'a').close()
+    except OSError:
+        log_path = os.path.join(os.getcwd(), filename)
+
+    return log_path
+
+
 class MyLogger:
     '''
     Create logger. Four different levels of information output. A level 3 ("FATAL")
     log will exit the program.
     '''
-    HOME = os.path.expanduser('~')
-    logFile = os.path.join(HOME, '.askcos.log')
+    logFile = select_log_path()
     levels = {
         0: 'INFO',
         1: 'WARN',

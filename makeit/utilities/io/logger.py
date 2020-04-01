@@ -3,10 +3,11 @@ import time
 import makeit.global_config as gc
 
 
-def select_log_path():
+def select_log_path(root='', name=''):
     """Select a location for the log file."""
-    filename = 'askcos.log'
-    log_path = os.path.join(os.path.expanduser('~'), filename)
+    filename = '{0}.log'.format(name) if name else 'askcos.log'
+    root = root or os.path.expanduser('~')
+    log_path = os.path.join(root, filename)
 
     try:
         open(log_path, 'a').close()
@@ -30,9 +31,9 @@ class MyLogger:
     }
 
     @staticmethod
-    def initialize_logFile(ROOT=os.path.dirname(os.path.dirname(os.path.dirname(__file__))), name=''):
+    def initialize_logFile(root='', name=''):
         if name:
-            MyLogger.logFile += '_{}'.format(name)
+            MyLogger.logFile = select_log_path(root, name)
         if os.path.isfile(MyLogger.logFile):
             os.remove(MyLogger.logFile)
         gc.time_zero = time.time()

@@ -445,6 +445,7 @@ def TransformStringToImage(transform, retro=True, **kwargs):
 
     options = defaultDrawOptions()
     options.dotsPerAngstrom = 60
+    options.dblBondOffset = 0.12
 
     # To generalize un-mapped atoms in transform, need to identify square brackets
     # without colon in the middle (e.g., [C]) and replace with dummy label [C:0] so

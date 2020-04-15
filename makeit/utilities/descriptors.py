@@ -11,6 +11,35 @@ descriptors_loc = 'descriptors'
 
 att_dtype = np.float32
 
+def rms_molecular_weight(smiles):
+    """Calculates the root mean square molecular weight for a given SMILES string
+
+    Args:
+        smiles: SMILES string for which to calculate root mean squared molecular weight
+
+    Returns:
+        float: root mean squared molecular weight
+
+    """
+    smiles_split = smiles.split('.')
+    mols = [Chem.MolFromSmiles(smi) for smi in smiles_split]
+    rms_molwt = np.sqrt(np.mean([pow(sum(a.GetMass() for a in m.GetAtoms()), 2) for m in mols]))
+    return rms_molwt
+
+def number_of_rings(smiles):
+    """Calculates the number of rings in a given SMILES string
+    
+    Args:
+        smiles: SMILES string for which to calculate the number of rings
+
+    Returns:
+        int: number of rings
+    
+    """
+    mol = Chem.MolFromSmiles(smiles)
+    return mol.GetRingInfo().NumRings()
+
+
 def oneHotVector(val, lst):
 	"""Converts a value to a one-hot vector based on options in lst.
 

@@ -428,6 +428,7 @@ class RetroTransformer(TemplateTransformer):
         try:
             template['rxn'] = rdchiralReaction(template['reaction_smarts'])
         except ValueError:
+            all_outcomes.append((_id, smiles, template_idx, [], 0.0)) # dummy outcome
             return all_outcomes
 
         for precursor in self.apply_one_template(mol, template):

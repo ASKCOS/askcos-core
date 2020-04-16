@@ -22,7 +22,7 @@ Software package for the prediction of feasible synthetic routes towards a desir
 ### Release Notes
 
 User notes:  
-* Need to add some
+* Need to add some as the previous notes were removed.
 
 Developer notes:
 * Initiate a tree builder search from the Interactive Path Planner (Issue #285). Users can now initiate a tree builder job by clicking a new button on the IPP, rather than having to go to the tree builder page. Once the target smiles string has been entered into the IPP, the user simply clicks the “Build tree” button to start an asynchronous tree builder job. The user will receive a notification when the jobs finishes so they can view the results in a new tab.

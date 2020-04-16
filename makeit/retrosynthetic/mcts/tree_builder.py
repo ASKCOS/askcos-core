@@ -114,8 +114,7 @@ class MCTS:
 
         # Load data and models
         self.pricer = pricer or self.load_pricer(kwargs.get('use_db', False))
-        self.chemhistorian = chemhistorian or self.load_chemhistorian(kwargs.get('use_db', False),
-                                                                      kwargs.get('hashed', True))
+        self.chemhistorian = chemhistorian or self.load_chemhistorian(kwargs.get('use_db', False))
         self.retroTransformer = retroTransformer or self.load_retro_transformer(
             use_db=kwargs.get('use_db', False),
             template_set=template_set,
@@ -141,11 +140,11 @@ class MCTS:
         return pricer
 
     @staticmethod
-    def load_chemhistorian(use_db, hashed):
+    def load_chemhistorian(use_db):
         """
         Loads chemhistorian.
         """
-        chemhistorian = ChemHistorian(use_db=use_db, hashed=hashed)
+        chemhistorian = ChemHistorian(use_db=use_db)
         chemhistorian.load()
         return chemhistorian
 
@@ -1179,7 +1178,7 @@ class MCTS:
         if (self.min_chemical_history_dict is not None
                 and self.min_chemical_history_dict['logic'] not in [None, 'none']
                 and self.chemhistorian is None):
-            self.chemhistorian = self.load_chemhistorian(kwargs.get('use_db', False), kwargs.get('hashed', True))
+            self.chemhistorian = self.load_chemhistorian(kwargs.get('use_db', False))
 
         self.reset(soft_reset=soft_reset)
 

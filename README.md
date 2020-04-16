@@ -2,7 +2,7 @@
 Software package for the prediction of feasible synthetic routes towards a desired compound and associated tasks related to synthesis planning. Originally developed under the DARPA Make-It program and now being developed under the [MLPDS Consortium](http://mlpds.mit.edu).
 
 # Contents
-* [v0.4.1 Release](#v041-release)
+* [v2020.04 Release](#v041-release)
     * [Release Notes](#release-notes)
     * [Using GitLab Deploy Tokens](#using-gitlab-deploy-tokens)
     * [Upgrade Information](#upgrade-information)
@@ -17,33 +17,38 @@ Software package for the prediction of feasible synthetic routes towards a desir
         * [Scaling Workers](#scaling-workers)
 * [How To Run Individual Modules](#how-to-run-individual-modules)
 
-# v0.4.1 Release
+# v2020.04 Release
 
 ### Release Notes
 
 User notes:  
-* New impurity predictor module
-* New reaction atom-mapping module
-* Upgrade to rdkit version 2019.03.3
-* Migration of rdchiral to standalone pypi package. rdchiral development can now be found at https://github.com/connorcoley/rdchiral
-* Improved buyables lookup consistency
-* Canonicalizes SMILES strings before lookup in buyables module
-* Improved granularity of feedback after buyable upload
-* Improved handling of reaction templates in rdchiral for "hypervalent" nitrogens. Significant improvement for nitration reactions
+* Need to add some
 
 Developer notes:
-* makeit data migrated to a separate repository (https://gitlab.com/mlpds_mit/ASKCOS/makeit-data)
-* Data copied from data-only docker container (registry.gitlab.com/mlpds_mit/askcos/makeit-data:0.4.1)
-* Docker builds are now much, much, much faster
-* chemhistorian data migrated to mongodb. This increases initialization mongodb seeding time, but decreases memory footprint
-* All dependencies, including third-party docker images, are now pinned to specific versions
-* Celery dependency upgraded to 4.4
-* Seeding of mongo db now occurs using the backend "app" service
-* Template relevance and fast filter models moved to tensorflow serving API endpoints
+* Initiate a tree builder search from the Interactive Path Planner (Issue #285). Users can now initiate a tree builder job by clicking a new button on the IPP, rather than having to go to the tree builder page. Once the target smiles string has been entered into the IPP, the user simply clicks the “Build tree” button to start an asynchronous tree builder job. The user will receive a notification when the jobs finishes so they can view the results in a new tab.
+* Enable versioning for the API (Issue #278). This is to allow additional functionality to be added which could break compatibility with previous API’s. For example, the first breaking change could be requiring everything to be a POST request. POST requests should accept JSON data in the request body and make it easier to handle lists and boolean values.
+* Option added to automatically redirect to the interactive visualization result upon completion (Issue #269).
+* An API endpoint for the atom mapping tool was added (Issue #268)
+* The deploy folder has been migrated to its own repository askcos-deploy (Issue #261). It now has no interdependencies with the data or models.
+* API’s created for the Impurity Predictor (Issue #256). Examples were included in the corresponding documentation.
+* Three new scoring coordinator specific workers have been created to handle template-free prediction, template-based prediction and fast filter evaluation respectively. Co-ordination will be handled on the client rather than on the server (issue #250)
+* Reconfigure the Docker image so that new templates can be added without the image needing to be rebuilt (Issue #247).
+* Additional data can now be added/appended to collections in the mongodb via the deploy script without clearing the collection first (Issue #246).
+* Chem Historian information has been migrated into the mongodb. This allows the data to be accessed via a db lookup and should reduce the applications memory footprint  (Issue #205).
+* Make it easier for companies/individuals to use their own retrained models and template sets (Issue #154).
+* Use tokens to authenticate users that make API calls (Issue #107).
+
 
 Bug fixes:
-* Buyables page bugfixes
-* nginx service restarts like the rest of the services now
+* Remove broken links from the old context pages (Issue #277).
+* Clean up remaining celery works from the Tree Builder (Issue #276).
+* Forward Predictor API may return -Infinity in JSON response (Issue #275).
+* Running the main tree.builder.py file as a script or the tree builder unit test with multiprocessing does not work (issue #274).
+* Atomic identity should not change in a tree builder reaction prediction (Issue #266).
+* Broken draw endpoint for specific molecules (Issue #260). 
+* Impurity Predictor continuously checks the progress of a job and continues to update the progress bar even when the job has completed (Issue #257).
+* Raise a value error if a template is mis-configured and can’t be found in one step retrosynthesis (issue #255).
+
 
 ### Using GitLab Deploy Tokens
 
@@ -54,12 +59,16 @@ $ export DEPLOY_TOKEN_USERNAME=
 $ export DEPLOY_TOKEN_PASSWORD=
 $ git clone https://$DEPLOY_TOKEN_USERNAME:$DEPLOY_TOKEN_PASSWORD@gitlab.com/mlpds_mit/askcos/askcos.git
 $ docker login registry.gitlab.com -u $DEPLOY_TOKEN_USERNAME -p $DEPLOY_TOKEN_PASSWORD
-$ cd askcos/deploy
-$ git checkout v0.4.1
+$ cd askcos
+$ git checkout v2020.04
+cd ..
+$ git clone https://$DEPLOY_TOKEN_USERNAME:$DEPLOY_TOKEN_PASSWORD@gitlab.com/mlpds_mit/askcos/askcos-deploy.git
+$ cd askcos-deploy
+$ git checkout v2020.04
 $ bash deploy.sh deploy
 ```
 
-__NOTE:__ Starting with version 0.4.1, the chemhistorian data has been migrated to mongodb, which may take up to ~5 minutes to initially seed for the first time upgrade/deployment. Subsequent upgrades should not require the re-seeding of the chemhistorian information.
+__NOTE:__ If this is a new install, as the chemhistorian data has been migrated to mongodb, it may take up to ~5 minutes to initially seed the database. Subsequent upgrades should not require the re-seeding of the chemhistorian information.
 
 ### Upgrade Information
 
@@ -69,19 +78,19 @@ We have a pre-built docker image of ASKCOS hosted on GitLab.
 It is a private repository; if you do not have access to pull the image, please [contact us](mailto:mlpds_support@mit.edu).
 In addition, you need to have the deploy/ folder from the ASKCOS code repository for the specific version for which you would like to upgrade to. Due to backend changes introduced with v0.3.1, the upgrade information is different is older versions, and the steps are summarized below:
 
-#### From v0.3.1 or v0.4.0
+#### From v0.3.1 or above
 ```
-$ git checkout v0.4.1
-$ bash deploy.sh clean-static start         # updates services to v0.4.1
-$ bash deploy.sh set-db-defaults seed-db    # this may take ~5 minutes to load "default chemicals data" (new in 0.4.1)
+$ git checkout v2020.04
+$ bash deploy.sh clean-static start         # updates services to v2020.04
+$ bash deploy.sh set-db-defaults seed-db    # this may take ~5 minutes to load "default chemicals data"
 ```
 
 #### From v0.2.x or v0.3.0
 ```
-$ git checkout v0.4.1
+$ git checkout v2020.04
 $ bash backup.sh
-$ bash deploy.sh clean-static start         # updates services to v0.4.1
-$ bash deploy.sh set-db-defaults seed-db    # this may take ~5 minutes to load "default chemicals data" (new in 0.4.1)
+$ bash deploy.sh clean-static start         # updates services to v2020.04
+$ bash deploy.sh set-db-defaults seed-db    # this may take ~5 minutes to load "default chemicals data"
 $ bash restore.sh
 ```
 
@@ -155,7 +164,7 @@ If you are upgrading the deployment from a previous version (prior to v0.3.1), o
 The provided `backup.sh` and `restore.sh` scripts are capable of handling the backup and restoring process. Please read the following carefully so as to not lose any user data:
 
 1) Start by making sure the previous version you would like to backup is __currently up and running__ with `docker-compose ps`.
-2) Checkout the newest version of the source code `git checkout v0.4.1`
+2) Checkout the newest version of the source code `git checkout v2020.04`
 3) Run `$ bash backup.sh`
 4) Make sure that the `deploy/backup` folder is present, and there is a folder with a long string of numbers (year+month+date+time) that corresponds to the time you just ran the backup command
 5) If the backup was successful (`db.json` and `user_saves` (\<v0.3.1) or `results.mongo` (\>=0.3.1) should be present), you can safely tear down the old application with `docker-compose down [-v]`

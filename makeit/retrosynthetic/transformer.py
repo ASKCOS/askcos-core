@@ -12,6 +12,7 @@ import numpy as np
 from functools import partial  # used for passing args to multiprocessing
 from makeit.utilities.io.logger import MyLogger
 from makeit.utilities.cluster import cluster_precursors
+from makeit.utilities.descriptors import rms_molecular_weight, number_of_rings
 from makeit.interfaces.template_transformer import TemplateTransformer
 from makeit.prioritization.templates.relevance import RelevanceTemplatePrioritizer
 from makeit.prioritization.precursors.relevanceheuristic import RelevanceHeuristicPrecursorPrioritizer
@@ -306,6 +307,8 @@ class RetroTransformer(TemplateTransformer):
             for precursor in precursors:
                 precursor['template_score'] = score
                 joined_smiles = '.'.join(precursor['smiles_split'])
+                precursor['rms_molwt'] = -rms_molecular_weight(joined_smiles)
+                precursor['num_rings'] = -number_of_rings(joined_smiles)
                 precursor['plausibility'] = fast_filter(joined_smiles, smiles)
                 # skip if no transformation happened or plausibility is below threshold
                 if joined_smiles == smiles or precursor['plausibility'] < fast_filter_threshold:

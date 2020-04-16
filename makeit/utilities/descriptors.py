@@ -1,5 +1,5 @@
 import numpy as np
-# import rdkit.Chem.Descriptors as Descriptors
+from rdkit.Chem import Descriptors
 import rdkit.Chem.rdMolDescriptors as rdMolDescriptors
 import rdkit.Chem.EState as EState
 import rdkit.Chem.rdPartialCharges as rdPartialCharges
@@ -23,7 +23,7 @@ def rms_molecular_weight(smiles):
     """
     smiles_split = smiles.split('.')
     mols = [Chem.MolFromSmiles(smi) for smi in smiles_split]
-    rms_molwt = np.sqrt(np.mean([pow(sum(a.GetMass() for a in m.GetAtoms()), 2) for m in mols]))
+    rms_molwt = np.sqrt(np.mean([pow(Descriptors.ExactMolWt(m), 2) for m in mols]))
     return rms_molwt
 
 def number_of_rings(smiles):

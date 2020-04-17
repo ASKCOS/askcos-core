@@ -10,7 +10,7 @@ RUN apt-get update && \
 COPY requirements.txt requirements.txt
 RUN pip install -r requirements.txt && rm requirements.txt
 
-COPY --from=registry.gitlab.com/mlpds_mit/askcos/makeit-data:0.4.1 /data /usr/local/ASKCOS/makeit/data
+COPY --from=registry.gitlab.com/mlpds_mit/askcos/makeit-data:2020.04 /data /usr/local/ASKCOS/makeit/data
 
 COPY --chown=askcos:askcos . /usr/local/ASKCOS
 

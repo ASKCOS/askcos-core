@@ -2,7 +2,7 @@
 Software package for the prediction of feasible synthetic routes towards a desired compound and associated tasks related to synthesis planning. Originally developed under the DARPA Make-It program and now being developed under the [MLPDS Consortium](http://mlpds.mit.edu).
 
 # Contents
-* [v2020.04 Release](#v041-release)
+* [2020.04 Release](#2020.04-release)
     * [Release Notes](#release-notes)
     * [Using GitLab Deploy Tokens](#using-gitlab-deploy-tokens)
     * [Upgrade Information](#upgrade-information)
@@ -10,44 +10,47 @@ Software package for the prediction of feasible synthetic routes towards a desir
     * [Prerequisites](#prerequisites)
     * [Deploying the Web Application](#deploying-the-web-application)
     * [Backing Up User Data](#backing-up-user-data)
-    * [(Optional) Building the ASKCOS Image](#optional-building-the-askcos-image)
+    * [(Optional) Building the ASKCOS Image](#(optional)-building-the-askcos-image)
     * [Add Customization](#add-customization)
     * [Managing Django](#managing-django)
     * [Important Notes](#important-notes)
         * [Scaling Workers](#scaling-workers)
 * [How To Run Individual Modules](#how-to-run-individual-modules)
 
-# v2020.04 Release
+# 2020.04 Release
 
 ### Release Notes
 
 User notes:  
-* Need to add some as the previous notes were removed.
+* Resdesigned and consolidated forward prediction UI combining reaction condition prediction, forward synthesis prediction, and impurity prediction (MR !279).
+* Drawing tool added to Interactive Path Planner UI (MR !282).
+* The Interactive Path Planner now saves last used settings as a browser cookie, and more visualization settings are exposed to the user (MR !306).
+* Users can now initiate a tree builder search from the Interactive Path Planner (Issue #285; MR !299). Users can now initiate a tree builder job by clicking a new button on the Interactive Path Planner, rather than having to go to the tree builder page. Once the target smiles string has been entered into the Interactive Path Planner, the user simply clicks the “Build tree” button to start an asynchronous tree builder job. The user will receive a notification when the jobs finishes so they can view the results in a new tab.
+* Option added to automatically redirect to the Interactive Path Planner UI upon completion of tree builder (using new UI) (Issue #269).
+* Show building block source in the Interactive Path Planner and tree visualization UIs (Issue #270; MR !301).
+* Reaction precedents for new template sets can be viewed in the UI (MR !295).
 
 Developer notes:
-* Initiate a tree builder search from the Interactive Path Planner (Issue #285). Users can now initiate a tree builder job by clicking a new button on the IPP, rather than having to go to the tree builder page. Once the target smiles string has been entered into the IPP, the user simply clicks the “Build tree” button to start an asynchronous tree builder job. The user will receive a notification when the jobs finishes so they can view the results in a new tab.
-* Enable versioning for the API (Issue #278). This is to allow additional functionality to be added which could break compatibility with previous API’s. For example, the first breaking change could be requiring everything to be a POST request. POST requests should accept JSON data in the request body and make it easier to handle lists and boolean values.
-* Option added to automatically redirect to the interactive visualization result upon completion (Issue #269).
-* An API endpoint for the atom mapping tool was added (Issue #268)
-* The deploy folder has been migrated to its own repository askcos-deploy (Issue #261). It now has no interdependencies with the data or models.
-* API’s created for the Impurity Predictor (Issue #256). Examples were included in the corresponding documentation.
-* Three new scoring coordinator specific workers have been created to handle template-free prediction, template-based prediction and fast filter evaluation respectively. Co-ordination will be handled on the client rather than on the server (issue #250)
-* Reconfigure the Docker image so that new templates can be added without the image needing to be rebuilt (Issue #247).
+* Enabled versioning for the API (Issue #278; MR !296). This is to allow additional functionality to be added which could break compatibility with previous API’s. For example, requiring everything to be a POST request. POST requests accept JSON data in the request body and make it easier to handle lists and boolean values.
+* The deploy folder has been migrated to its own repository `askcos-deploy` (Issue #261). It now has no interdependencies with the data or models.
+* An API endpoint for the atom mapping tool was added (Issue #268).
+* APIs created for the Impurity Predictor (Issue #256). Examples were included in the corresponding documentation.
+* Three new scoring coordinator specific workers have been created to handle template-free prediction, template-based prediction and fast filter evaluation respectively. Coordination will be handled on the client rather than on the server (Issue #250).
+* Reconfigure the Docker image so that new templates can be added without the image needing to be rebuilt (Issue #247; MR !298).
 * Additional data can now be added/appended to collections in the mongodb via the deploy script without clearing the collection first (Issue #246).
 * Chem Historian information has been migrated into the mongodb. This allows the data to be accessed via a db lookup and should reduce the applications memory footprint  (Issue #205).
 * Make it easier for companies/individuals to use their own retrained models and template sets (Issue #154).
 * Use tokens to authenticate users that make API calls (Issue #107).
+* Refactored MCTS code to decouple pure python code from celery infrastructure (MR !283).
+* Added Makefile to facilitate building docker images (!MR 285)
+* Added option to retain atom mapping for forward prediction API calls (Issue #262; MR !308).
 
 
 Bug fixes:
 * Remove broken links from the old context pages (Issue #277).
-* Clean up remaining celery works from the Tree Builder (Issue #276).
-* Forward Predictor API may return -Infinity in JSON response (Issue #275).
-* Running the main tree.builder.py file as a script or the tree builder unit test with multiprocessing does not work (issue #274).
-* Atomic identity should not change in a tree builder reaction prediction (Issue #266).
-* Broken draw endpoint for specific molecules (Issue #260). 
-* Impurity Predictor continuously checks the progress of a job and continues to update the progress bar even when the job has completed (Issue #257).
-* Raise a value error if a template is mis-configured and can’t be found in one step retrosynthesis (issue #255).
+* Forward Predictor API may return -Infinity in JSON response (Issue #275; !300).
+* Running the main tree.builder.py file as a script or the tree builder unit test with multiprocessing did not work (issue #274; MR !283).
+* Atomic identity should not change in a tree builder reaction prediction (Issues #255, #266, #296; MRs !274, !314).
 
 
 ### Using GitLab Deploy Tokens

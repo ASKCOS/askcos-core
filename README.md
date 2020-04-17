@@ -25,7 +25,7 @@ User notes:
 * Resdesigned and consolidated forward prediction UI combining reaction condition prediction, forward synthesis prediction, and impurity prediction (MR !279).
 * Drawing tool added to Interactive Path Planner UI (MR !282).
 * The Interactive Path Planner now saves last used settings as a browser cookie, and more visualization settings are exposed to the user (MR !306).
-* Users can now initiate a tree builder search from the Interactive Path Planner (Issue #285; MR !299). Users can now initiate a tree builder job by clicking a new button on the Interactive Path Planner, rather than having to go to the tree builder page. Once the target smiles string has been entered into the Interactive Path Planner, the user simply clicks the “Build tree” button to start an asynchronous tree builder job. The user will receive a notification when the jobs finishes so they can view the results in a new tab.
+* Users can now initiate a tree builder search from the Interactive Path Planner (Issue #285; MR !299). Users can now initiate a tree builder job by clicking a new button on the Interactive Path Planner, rather than having to go to the tree builder page. Once the target smiles string has been entered into the Interactive Path Planner, the user simply clicks the “Build tree” button to start an asynchronous tree builder job. The user will receive a notification when the job(s) finish so they can view the results in a new tab.
 * Option added to automatically redirect to the Interactive Path Planner UI upon completion of tree builder (using new UI) (Issue #269).
 * Show building block source in the Interactive Path Planner and tree visualization UIs (Issue #270; MR !301).
 * Reaction precedents for new template sets can be viewed in the UI (MR !295).
@@ -42,13 +42,13 @@ Developer notes:
 * Make it easier for companies/individuals to use their own retrained models and template sets (Issue #154).
 * Use tokens to authenticate users that make API calls (Issue #107).
 * Refactored MCTS code to decouple pure python code from celery infrastructure (MR !283).
-* Added Makefile to facilitate building docker images (!MR 285)
+* Added Makefile to facilitate building docker images (MR !285)
 * Added option to retain atom mapping for forward prediction API calls (Issue #262; MR !308).
 
 
 Bug fixes:
 * Remove broken links from the old context pages (Issue #277).
-* Forward Predictor API may return -Infinity in JSON response (Issue #275; !300).
+* Forward Predictor API may return -Infinity in JSON response (Issue #275; MR !300).
 * Running the main tree.builder.py file as a script or the tree builder unit test with multiprocessing did not work (issue #274; MR !283).
 * Atomic identity should not change in a tree builder reaction prediction (Issues #255, #266, #296; MRs !274, !314).
 
@@ -228,81 +228,3 @@ Many of the individual modules -- at least the ones that are the most interestin
 
 #### Using the coarse "fast filter" (binary classifier) for evaluating reaction plausibility
 ```makeit/synthetic/evaluation/fast_filter.py```
-
-#### Integrated CASP tool
-For the integrated synthesis planning tool at ```makeit/application/run.py```, there are several options available. The currently enabled options for the command-line tool can be found at ```makeit/utilities/io/arg_parser.py```. There are some options that are only available for the website and some that are only available for the command-line version. As an example of the former, the consideration of popular but non-buyable chemicals as suitable "leaf nodes" in the search. An example of how to use this module is:
-
-```python ASKCOS/Make-It/makeit/application/run.py --TARGET atropine```
-
-##### Model choices.
-The following options influence which models are used to carry out the different tasks within the algorithm.
-
-- Context recommendation: via '--context_recommender', currently has the following options:
-
-	-'Nearest_Neighbor': Uses a nearest neighbor based database search (memory intensive, ~30GB, and slow; relies on external data file)
-	
-	-'Neural_Network': Uses a pretrained neural network (highly recommended!!)
-
-- Context prioritization: via '--context_prioritization', specifies how we should determine the "best" context for a proposed reaction. It currently has the following options:
-
-	-'Probability': uses the likelihood of success for the reaction under that condition
-	
-	-'Rank': uses the rank of the reaction under that condition relative to all other outcomes
-
-- Forward evaluation: via '--forward_scoring', is used to evaluate the likelihood of success of a reaction. It currently has the following options:
-
-	-'Template_Based': uses the original forward evaluation method enumerating all possible outcomes by applying templates and then predicting the most likely main product [https://pubs.acs.org/doi/abs/10.1021/acscentsci.7b00064] (NOTE: the template-based forward predictor requires a custom built version of RDKit from https://github.com/connorcoley/rdkit - we highly recommend using the template-free approach)
-	
-    -'Template_Free': uses the higher-performing and faster template-free method based on graph convolutional neural networks [https://arxiv.org/abs/1709.04555]
-    
-    -'Fast_Filter': uses a binary classifier to distinguish good and bad reaction suggestions. It is imperfect, but very fast. Based on the "in-scope filter" suggested by Marwin Segler [https://www.nature.com/articles/nature25978]
-
-- Retrosynthetic template prioritization: via '--template_prioritization', is used to minimize the number of reaction templates that must be applied to the target compound at each iteration. It currently has the following options:
-
-	-'Relevance': Quantifies how relevant a given template is for the considered reactants, based on the approach suggested by Marwin Segler [https://onlinelibrary.wiley.com/doi/abs/10.1002/chem.201605499]
-	
-	-'Popularity': Ranking based on number of references in literature, independent of the product species
-
-- Precursor prioritization: via '--precursor_prioritization', is used to determine which precursor is the most promising branch to pursue. It currently has the following options:
-
-	-'Heuristic': Simple heuristic, with decreasing score as number of atoms, rings and chiral centers increases
-	
-	-'SCScore': Synthetic Complexity Score - learned quantity indicating how complex a molecule is. Tries to interpret molecules with a protection/deprotection group as less complex than their non-protected counterparts. [https://pubs.acs.org/doi/abs/10.1021/acs.jcim.7b00622]
-
-
-
-- Tree scoring: via '--tree_scoring', determines how final synthesis trees should be sorted/ranked. It currently has the following options:
-
-	-'Product': uses the product of template score and forward prediction score
-	
-	-'Forward_only': uses only the forward prediction score
-	
-	-'Template_only': uses only the template score
-
-#### Limits and thresholds: the following options will set limits for the different parts of the program
-
-- Expansion time via '--expansion_time': limit the amount of time the program spends expanding the retro synthetic tree. Default value is 60 seconds.
-  
-- Maximum search depth via '--max_depth': limit the search depth in the retro synthetic expansion. Default value is 4.
-  
-- Maximum degree of branching via '--max_branching': limit the number of branches generated in each layer of the retro synthetic tree. Default value is 20
-  
-- Maximum number of buyable trees via '--max_trees': limit the number of buyable trees the program  should search for. Default value is 500.
-
-- Maximum number of templates to be applied via '--template_count': limit the number of templates that are appied for each expansion when using the popularity prioritizer. Default value is 10000.
-
-- Minimal number of templates to be considered in retro synthetic direction for non-chiral reactions via '--mincount_retro'. Default value is 25.
-  
-- Minimal number of templates to be considered in retro synthetic direction for chiral reactions via '--mincoun_retro_c'. Default value is 10.
- 
-- Minimal number of templates to be considered in synthetic direction via '--synth_mincount'. Default value is 25.
-  
-- Minimal target rank for considering a target feasible via '--rank_threshold'. Default value is 10.
-
-- Minimal probability for considering a target feasible via '--prob_threshold'. Default value is 0.01.
-
-- Maximum number of contexts to be proposed for each reaction via '--max_contexts'. Default value is 10
-
-- Maximum price per gram for a component to be considered buyable via '--max_ppg'. Default value is 100
-  
-- Precursor filtering: via '--apply_fast_filter' and '--filter_threshold', is used to impose rapid filtering of low-quality retrosynthetic suggestions. Default is True and 0.75

@@ -63,11 +63,11 @@ $ export DEPLOY_TOKEN_PASSWORD=
 $ git clone https://$DEPLOY_TOKEN_USERNAME:$DEPLOY_TOKEN_PASSWORD@gitlab.com/mlpds_mit/askcos/askcos.git
 $ docker login registry.gitlab.com -u $DEPLOY_TOKEN_USERNAME -p $DEPLOY_TOKEN_PASSWORD
 $ cd askcos
-$ git checkout v2020.04
+$ git checkout 2020.04
 cd ..
 $ git clone https://$DEPLOY_TOKEN_USERNAME:$DEPLOY_TOKEN_PASSWORD@gitlab.com/mlpds_mit/askcos/askcos-deploy.git
 $ cd askcos-deploy
-$ git checkout v2020.04
+$ git checkout 2020.04
 $ bash deploy.sh deploy
 ```
 
@@ -83,16 +83,16 @@ In addition, you need to have the deploy/ folder from the ASKCOS code repository
 
 #### From v0.3.1 or above
 ```
-$ git checkout v2020.04
-$ bash deploy.sh clean-static start         # updates services to v2020.04
+$ git checkout 2020.04
+$ bash deploy.sh clean-static start         # updates services to 2020.04
 $ bash deploy.sh set-db-defaults seed-db    # this may take ~5 minutes to load "default chemicals data"
 ```
 
 #### From v0.2.x or v0.3.0
 ```
-$ git checkout v2020.04
+$ git checkout 2020.04
 $ bash backup.sh
-$ bash deploy.sh clean-static start         # updates services to v2020.04
+$ bash deploy.sh clean-static start         # updates services to 2020.04
 $ bash deploy.sh set-db-defaults seed-db    # this may take ~5 minutes to load "default chemicals data"
 $ bash restore.sh
 ```
@@ -167,7 +167,7 @@ If you are upgrading the deployment from a previous version (prior to v0.3.1), o
 The provided `backup.sh` and `restore.sh` scripts are capable of handling the backup and restoring process. Please read the following carefully so as to not lose any user data:
 
 1) Start by making sure the previous version you would like to backup is __currently up and running__ with `docker-compose ps`.
-2) Checkout the newest version of the source code `git checkout v2020.04`
+2) Checkout the newest version of the source code `git checkout 2020.04`
 3) Run `$ bash backup.sh`
 4) Make sure that the `deploy/backup` folder is present, and there is a folder with a long string of numbers (year+month+date+time) that corresponds to the time you just ran the backup command
 5) If the backup was successful (`db.json` and `user_saves` (\<v0.3.1) or `results.mongo` (\>=0.3.1) should be present), you can safely tear down the old application with `docker-compose down [-v]`

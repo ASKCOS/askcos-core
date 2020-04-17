@@ -66,29 +66,25 @@ $ git checkout 2020.04
 $ bash deploy.sh deploy
 ```
 
-__NOTE:__ If this is a new install, as the chemhistorian data has been migrated to mongodb, it may take up to ~5 minutes to initially seed the database. Subsequent upgrades should not require the re-seeding of the chemhistorian information.
-
 ### Upgrade Information
 
 The easiest way to upgrade to a new version of ASKCOS is using Docker and docker-compose.
 To get started, make sure both docker and docker-compose are installed on your machine.
 We have a pre-built docker image of ASKCOS hosted on GitLab.
 It is a private repository; if you do not have access to pull the image, please [contact us](mailto:mlpds_support@mit.edu).
-In addition, you need to have the deploy/ folder from the ASKCOS code repository for the specific version for which you would like to upgrade to. Due to backend changes introduced with v0.3.1, the upgrade information is different is older versions, and the steps are summarized below:
+Start with the `askcos-deploy` repository. The process for cloning the repository and checking out the correct version tag is described above.
 
 #### From v0.3.1 or above
 ```
 $ git checkout 2020.04
-$ bash deploy.sh clean-static start         # updates services to 2020.04
-$ bash deploy.sh set-db-defaults seed-db    # this may take ~5 minutes to load "default chemicals data"
+$ bash deploy.sh update -v 2020.04
 ```
 
 #### From v0.2.x or v0.3.0
 ```
 $ git checkout 2020.04
 $ bash backup.sh
-$ bash deploy.sh clean-static start         # updates services to 2020.04
-$ bash deploy.sh set-db-defaults seed-db    # this may take ~5 minutes to load "default chemicals data"
+$ bash deploy.sh update -v 2020.04
 $ bash restore.sh
 ```
 
@@ -179,10 +175,10 @@ The askcos image itself can be built using the Dockerfile in this repository.
 $ git clone https://gitlab.com/mlpds_mit/askcos/askcos  
 $ cd askcos/  
 $ git lfs pull   
-$ docker build -t askcos .
+$ docker build -t <image name> .
 ```
 
-__NOTE:__ For application deployment, double check the image tag used in the `docker-compose.yml` file and be sure to tag your newly built image with the same image name. Otherwise, the image tag used in `docker-compose.yml` will be pulled and deployed instead of the image that was just built.
+__NOTE:__ The image name should correspond with what exists in the `docker-compose.yml` file. When using the `deploy.sh` script, the image repository is substituted with the environment variable `ASKCOS_IMAGE_REGISTRY`. You can either give your image whatever custom name you'd like, or keep the name `askcos` which should work with the `docker-compose.yml` files as it exsists.
 
 ### Add Customization
 
@@ -205,16 +201,14 @@ In this case you'll be presented an interactive prompt to create a superuser wit
 
 ### Scaling Workers
 
-Only 1 worker per queue is deployed by default with limited concurrency. This is not ideal for many-user demand.
-You can easily scale the number of celery workers you'd like to use with
-
+Only 1 worker per queue is deployed by default with limited concurrency. This is not ideal for many-user demand. 
+The scaling of each worker is defined at the top of the `deploy.sh` script. 
+To scale a desired worker, change the appropriate value in `deploy.sh`, for example:
 ```
-$ docker-compose up -d --scale tb_c_worker=N tb_c_worker
+n_tb_c_worker=N          # Tree builder chiral worker
 ```
 
-where N is the number of workers you want, for example. The above note applies to each worker you start, however, and
-each worker will consume RAM. You can also adjust the default number of workers defined by the variables at the top of
-the `deploy.sh` script.
+where N is the number of workers you want. Then run `bash deploy.sh start [-v <version>]`.
 
 
 # How To Run Individual Modules

@@ -16,7 +16,7 @@ RUN apt-get update && \
     useradd -ms /bin/bash askcos
 
 COPY requirements.txt requirements.txt
-RUN pip install -r requirements.txt && rm requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt && rm requirements.txt
 
 COPY --from=data /data /usr/local/ASKCOS/makeit/data
 

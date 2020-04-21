@@ -1,7 +1,15 @@
-FROM python:3.5-stretch
+ARG PY_VERSION=3.5-stretch
+ARG RDKIT_VERSION=2019.03-py35
+ARG DATA_VERSION=dev
 
-COPY --from=registry.gitlab.com/mlpds_mit/askcos/askcos/rdkit:2019.03-py35 /usr/local/rdkit-2019-03/rdkit /usr/local/rdkit-2019-03/rdkit
-COPY --from=registry.gitlab.com/mlpds_mit/askcos/askcos/rdkit:2019.03-py35 /usr/local/rdkit-2019-03/lib /usr/local/rdkit-2019-03/lib
+FROM registry.gitlab.com/mlpds_mit/askcos/askcos/rdkit:$RDKIT_VERSION as rdkit
+
+FROM registry.gitlab.com/mlpds_mit/askcos/makeit-data:$DATA_VERSION as data
+
+FROM python:$PY_VERSION
+
+COPY --from=rdkit /usr/local/rdkit-2019-03/rdkit /usr/local/rdkit-2019-03/rdkit
+COPY --from=rdkit /usr/local/rdkit-2019-03/lib /usr/local/rdkit-2019-03/lib
 
 RUN apt-get update && \
     apt-get install -y libboost-thread-dev libboost-python-dev libboost-iostreams-dev python-tk libopenblas-dev libeigen3-dev libcairo2-dev pkg-config python-dev python-mysqldb && \
@@ -10,7 +18,7 @@ RUN apt-get update && \
 COPY requirements.txt requirements.txt
 RUN pip install -r requirements.txt && rm requirements.txt
 
-COPY --from=registry.gitlab.com/mlpds_mit/askcos/makeit-data:2020.04 /data /usr/local/ASKCOS/makeit/data
+COPY --from=data /data /usr/local/ASKCOS/makeit/data
 
 COPY --chown=askcos:askcos . /usr/local/ASKCOS
 

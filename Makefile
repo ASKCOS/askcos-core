@@ -13,6 +13,7 @@ GIT_DESCRIBE := $(shell git describe --tags --always --dirty)
 
 REGISTRY ?= registry.gitlab.com/mlpds_mit/askcos/askcos
 TAG ?= $(VERSION)
+DATA_VERSION ?= $(VERSION)
 
 main build:
 	@echo Building docker image: $(REGISTRY):$(TAG)
@@ -21,7 +22,7 @@ main build:
 		-e 's/{GIT_HASH}/$(GIT_HASH)/g' \
 		-e 's/{GIT_DATE}/$(GIT_DATE)/g' \
 		-e 's/{GIT_DESCRIBE}/$(GIT_DESCRIBE)/g' \
-		Dockerfile | docker build -t $(REGISTRY):$(TAG) -f - .
+		Dockerfile | docker build -t $(REGISTRY):$(TAG) --build-arg DATA_VERSION=$(DATA_VERSION) -f - .
 
 push: build
 	@docker push $(REGISTRY):$(TAG)

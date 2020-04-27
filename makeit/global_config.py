@@ -170,3 +170,12 @@ TEMPLATE_FREE_FORWARD_PREDICTOR = {
 SELECTIVITY = {
     'model_path': os.path.join(models_path, 'selectivity', 'model.ckpt-30615')
 }
+
+GEN_SELECTIVITY = {
+    'model_path': os.path.join(models_path, 'selectivity', 'general_selectivity', 'best_model.hdf5'),
+    'initializer': '[CH4:1]>>[CH4:1]',
+    'atom_fdim': 82,
+    'bond_fdim': 6,
+    'max_nb': 10,
+    'binary_fdim': 11,
+}

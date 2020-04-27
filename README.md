@@ -81,11 +81,17 @@ $ git checkout 2020.04
 $ bash deploy.sh update -v 2020.04
 ```
 
+If you have not seeded the database before (if you're upgrading from v0.3.1), you will need to do so:
+```
+$ bash deploy.sh set-db-defaults seed-db
+```
+
 #### From v0.2.x or v0.3.0
 ```
 $ git checkout 2020.04
 $ bash backup.sh
 $ bash deploy.sh update -v 2020.04
+$ bash deploy.sh set-db-defaults seed-db
 $ bash restore.sh
 ```
 
@@ -179,7 +185,7 @@ $ git lfs pull
 $ docker build -t <image name> .
 ```
 
-__NOTE:__ The image name should correspond with what exists in the `docker-compose.yml` file. When using the `deploy.sh` script, the image repository is substituted with the environment variable `ASKCOS_IMAGE_REGISTRY`. You can either give your image whatever custom name you'd like, or keep the name `askcos` which should work with the `docker-compose.yml` files as it exsists.
+__NOTE:__ The image name should correspond with what exists in the `docker-compose.yml` file. By default, the image name is environment variable `ASKCOS_IMAGE_REGISTRY` + `askcos`. If you choose to use a custom image name, make sure to modify the `ASKCOS_IMAGE_REGISTRY` variable or the `docker-compose.yml` file accordingly.
 
 ### Add Customization
 

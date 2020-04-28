@@ -61,6 +61,7 @@ ASKCOS can also be downloaded using deploy tokens, these provide __read-only__ a
 ```bash
 $ export DEPLOY_TOKEN_USERNAME=
 $ export DEPLOY_TOKEN_PASSWORD=
+$ docker login registry.gitlab.com -u $DEPLOY_TOKEN_USERNAME -p $DEPLOY_TOKEN_PASSWORD
 $ git clone https://$DEPLOY_TOKEN_USERNAME:$DEPLOY_TOKEN_PASSWORD@gitlab.com/mlpds_mit/askcos/askcos-deploy.git
 $ cd askcos-deploy
 $ git checkout 2020.04

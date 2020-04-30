@@ -55,7 +55,7 @@ class TestPricer(unittest.TestCase):
 
     def test_dump_and_load(self):
         """Test that we can dump the prices to a file and load again."""
-        filename = 'temp.json.gz'
+        filename = os.path.join(os.path.dirname(__file__), 'temp.json.gz')
         self.pricer.dump_to_file(filename)
         self.assertTrue(os.path.isfile(filename))
 
@@ -73,7 +73,7 @@ class TestPricer(unittest.TestCase):
     @unittest.skipIf(db_available(), 'Skipping because mongo db is available.')
     def test_db_fallback(self):
         """Test that we load from file if db is not available."""
-        filename = 'temp.json.gz'
+        filename = os.path.join(os.path.dirname(__file__), 'temp.json.gz')
         self.pricer.dump_to_file(filename)
         self.assertTrue(os.path.isfile(filename))
 

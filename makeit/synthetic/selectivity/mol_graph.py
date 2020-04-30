@@ -2,7 +2,7 @@ from rdkit import Chem
 import numpy as np
 
 elem_list = ['C', 'N', 'O', 'S', 'F', 'Si', 'P', 'Cl', 'Br', 'Mg', 'Na', 'Ca', 'Fe', 'As', 'Al', 'I', 'B', 'V', 'K', 'Tl', 'Yb', 'Sb', 'Sn', 'Ag', 'Pd', 'Co', 'Se', 'Ti', 'Zn', 'H', 'Li', 'Ge', 'Cu', 'Au', 'Ni', 'Cd', 'In', 'Mn', 'Zr', 'Cr', 'Pt', 'Hg', 'Pb', 'W', 'Ru', 'Nb', 'Re', 'Te', 'Rh', 'Tc', 'Ba', 'Bi', 'Hf', 'Mo', 'U', 'Sm', 'Os', 'Ir', 'Ce','Gd','Ga','Cs', 'unknown']
-atom_fdim = len(elem_list) + 6 + 6 + 6 + 1
+atom_fdim = len(elem_list) + 6 + 6 + 6 + 2
 bond_fdim = 6
 max_nb = 10
 binary_fdim = 5 + 6
@@ -251,11 +251,3 @@ def smiles2graph_list(smiles_list, idxfunc=lambda x:x.GetIdx()):
     res = list(map(lambda x:smiles2graph(x,idxfunc), smiles_list))
     fatom_list, fbond_list, gatom_list, gbond_list, nb_list = zip(*res)
     return pack2D(fatom_list), pack2D(fbond_list), pack2D_withidx(gatom_list), pack2D_withidx(gbond_list), pack1D(nb_list), get_mask(fatom_list)
-
-
-m = Chem.MolFromSmiles('CC')
-atom = m.GetAtoms()[0]
-bond = m.GetBonds()[0]
-atom_fdim = len(atom_features(atom))
-bond_fdim = len(bond_features(bond))
-

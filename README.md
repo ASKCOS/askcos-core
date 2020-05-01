@@ -1,4 +1,4 @@
-# ASKCOS:
+# ASKCOS
 Software package for the prediction of feasible synthetic routes towards a desired compound and associated tasks related to synthesis planning. Originally developed under the DARPA Make-It program and now being developed under the [MLPDS Consortium](http://mlpds.mit.edu).
 
 # Contents
@@ -19,7 +19,7 @@ Software package for the prediction of feasible synthetic routes towards a desir
 
 # 2020.04 Release
 
-### Release Notes
+## Release Notes
 
 User notes:  
 * New general selectivity model available from the Interactive Path Planner UI and as an API endpoint (MR !319).
@@ -55,7 +55,7 @@ Bug fixes:
 * Atomic identity should not change in a tree builder reaction prediction (Issues #255, #266, #296; MRs !274, !314).
 
 
-### Using GitLab Deploy Tokens
+## Using GitLab Deploy Tokens
 
 ASKCOS can also be downloaded using deploy tokens, these provide __read-only__ access to the source code and our container registry in GitLab. Below is a complete example showing how to deploy the ASKCOS application using deploy tokens (omitted in this example). The deploy tokens can be found on the [MLPDS Member Resources ASKCOS Versions Page](https://mlpds.mit.edu/member-resources-releases-versions/). The only software prerequisites are git, docker, and docker-compose.
 
@@ -69,7 +69,7 @@ $ git checkout 2020.04
 $ bash deploy.sh deploy
 ```
 
-### Upgrade Information
+## Upgrade Information
 
 The easiest way to upgrade to a new version of ASKCOS is using Docker and docker-compose.
 To get started, make sure both docker and docker-compose are installed on your machine.
@@ -77,19 +77,19 @@ We have a pre-built docker image of ASKCOS hosted on GitLab.
 It is a private repository; if you do not have access to pull the image, please [contact us](mailto:mlpds_support@mit.edu).
 Start with the `askcos-deploy` repository. The process for cloning the repository and checking out the correct version tag is described above.
 
-#### From v0.3.1 or above
-```
+### From v0.3.1 or above
+```bash
 $ git checkout 2020.04
 $ bash deploy.sh update -v 2020.04
 ```
 
 If you have not seeded the database before (if you're upgrading from v0.3.1), you will need to do so:
-```
+```bash
 $ bash deploy.sh set-db-defaults seed-db
 ```
 
-#### From v0.2.x or v0.3.0
-```
+### From v0.2.x or v0.3.0
+```bash
 $ git checkout 2020.04
 $ bash backup.sh
 $ bash deploy.sh update -v 2020.04
@@ -101,13 +101,13 @@ __NOTE:__ A large amount of data has been migrated to the mongo db starting in v
 
 # First Time Deployment with Docker
 
-### Prerequisites
+## Prerequisites
 
  - If you're building the image from scratch, make sure git (and git lfs) is installed on your machine
  - Install Docker [OS specific instructions](https://docs.docker.com/install/)
  - Install docker-compose [installation instructions](https://docs.docker.com/compose/install/#install-compose)
 
-### Deploying the Web Application
+## Deploying the Web Application
 
 Deployment is initiated by a bash script that runs a few docker-compose commands in a specific order.
 Several database services need to be started first, and more importantly seeded with data, before other services 
@@ -159,7 +159,7 @@ If you would like to clean up and remove everything from a previous deployment (
 $ bash deploy.sh clean
 ```
 
-### Backing Up User Data
+## Backing Up User Data
 
 If you are upgrading from v0.3.1 or later, the backup/restore process is no longer needed unless you are moving deployments to a new machine.
 
@@ -176,7 +176,7 @@ The provided `backup.sh` and `restore.sh` scripts are capable of handling the ba
 
 Note: For versions >=0.3.1, user data persists in docker volumes and is not tied to the lifecycle of the container services. If the [-v] flag is not used with `docker-compose down`, volumes do not get removed, and user data is safe. In this case, the backup/restore procedure is not necessary as the containers that get created upon an install/upgrade will continue to use the docker volumes that contain all the important data. If the [-v] flag is used, all data will be removed and a restore will be required to recover user data.
 
-### (Optional) Building the ASKCOS Image
+## (Optional) Building the ASKCOS Image
 
 The askcos image itself can be built using the Dockerfile in this repository.
 
@@ -189,18 +189,18 @@ $ docker build -t <image name> .
 
 __NOTE:__ The image name should correspond with what exists in the `docker-compose.yml` file. By default, the image name is environment variable `ASKCOS_IMAGE_REGISTRY` + `askcos`. If you choose to use a custom image name, make sure to modify the `ASKCOS_IMAGE_REGISTRY` variable or the `docker-compose.yml` file accordingly.
 
-### Add Customization
+## Add Customization
 
 There are a few parts of the application that you can customize:
 * Header sub-title next to ASKCOS (to designate this as a local deployment at your organization)
 
 This is handled as an environment variable that can change upon deployment (and are therefore not tied into the image directly). This can be found in `deploy/customization`. Please let us know what other degrees of customization you would like.
 
-### Managing Django
+## Managing Django
 
 If you'd like to manage the Django app (i.e. - run python manage.py ...), for example, to create an admin superuser, you can run commands in the _running_ app service (do this _after_ `docker-compose up`) as follows:
 
-```
+```bash
 $ docker-compose exec app bash -c "python /usr/local/ASKCOS/askcos/manage.py createsuperuser"
 ```
 
@@ -223,17 +223,27 @@ where N is the number of workers you want. Then run `bash deploy.sh start [-v <v
 # How To Run Individual Modules
 Many of the individual modules -- at least the ones that are the most interesting -- can be run "standalone". Examples of how to use them are often found in the ```if __name__ == '__main__'``` statement at the bottom of the script definitions. For example...
 
-#### Using the learned synthetic complexity metric (SCScore)
-```makeit/prioritization/precursors/scscore.py```
+Using the learned synthetic complexity metric (SCScore):
+```
+makeit/prioritization/precursors/scscore.py
+```
 
-#### Obtaining a single-step retrosynthetic suggestion with consideration of chirality
-```makeit/retrosynthetic/transformer.py```
+Obtaining a single-step retrosynthetic suggestion with consideration of chirality:
+```
+makeit/retrosynthetic/transformer.py
+```
 
-#### Finding recommended reaction conditions based on a trained neural network model
-```makeit/synthetic/context/neuralnetwork.py```
+Finding recommended reaction conditions based on a trained neural network model:
+```
+makeit/synthetic/context/neuralnetwork.py
+```
 
-#### Using the template-free forward predictor
-```makeit/synthetic/evaluation/template_free.py```
+Using the template-free forward predictor:
+```
+makeit/synthetic/evaluation/template_free.py
+```
 
-#### Using the coarse "fast filter" (binary classifier) for evaluating reaction plausibility
-```makeit/synthetic/evaluation/fast_filter.py```
+Using the coarse "fast filter" (binary classifier) for evaluating reaction plausibility:
+```
+makeit/synthetic/evaluation/fast_filter.py
+```

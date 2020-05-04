@@ -22,6 +22,7 @@ Software package for the prediction of feasible synthetic routes towards a desir
 ### Release Notes
 
 User notes:  
+* New general selectivity model available from the Interactive Path Planner UI and as an API endpoint (MR !319).
 * Redesigned and consolidated forward prediction UI combining reaction condition prediction, forward synthesis prediction, and impurity prediction (MR !279).
 * Drawing tool added to Interactive Path Planner UI (MR !282).
 * The Interactive Path Planner now saves last used settings locally in the browser, and more visualization settings are exposed to the user (MR !306).

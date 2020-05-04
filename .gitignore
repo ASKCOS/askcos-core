@@ -17,3 +17,5 @@ deploy/askcos.ssl.key
 # ignore pycharm folder
 .idea/
 
+# directory for gitlab pages source files
+pages/

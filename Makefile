@@ -4,7 +4,7 @@
 #
 ################################################################################
 
-.PHONY: build debug push test
+.PHONY: build debug push test setup_pages
 
 VERSION ?= dev
 GIT_HASH := $(shell git log -1 --format='format:%H')
@@ -32,3 +32,7 @@ debug:
 
 test:
 	docker run --rm -w /usr/local/ASKCOS $(VOLUMES) $(REGISTRY):$(TAG) /bin/bash -c "python -m unittest discover -v -p '*test.py' -s makeit"
+
+setup_pages:
+	@if [ -d "./pages" ]; then echo "directory 'pages' already exists"; exit 1; fi
+	git clone --single-branch --branch pages $(shell git remote get-url origin) pages

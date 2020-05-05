@@ -18,11 +18,10 @@ class ChemHistorian:
     Attributes:
         CHEMICALS_DB (MongoDB): Database of chemicals.
         use_db (bool): Flag to use mongo database
-        hashed (bool): Flag to use hashed smiles strings
-        occurrences (dict): Dictionary of (hashed) smiles -> occurrence frequencies
+        occurrences (dict): Dictionary of smiles -> occurrence frequencies
     """
 
-    def __init__(self, CHEMICALS_DB=None, use_db=False, hashed=False):
+    def __init__(self, CHEMICALS_DB=None, use_db=False):
         """Initializes ChemHistorian.
 
         Args:
@@ -30,7 +29,6 @@ class ChemHistorian:
         """
         self.use_db = use_db
         self.CHEMICALS_DB = CHEMICALS_DB
-        self.hashed = hashed
 
         self.occurrences = {}
 
@@ -47,10 +45,6 @@ class ChemHistorian:
         Args:
             file_path (str, optional): Path to the output file.
                 (default: {gc.historian_data})
-            refs (bool, optional): Whether to include the references or just
-                the counts. (default: {False})
-            hashed (bool, optional): Whether the data is hashed.
-                (default: {False})
         """
 
         chemicals = []
@@ -108,7 +102,7 @@ class ChemHistorian:
 
         MyLogger.print_and_log('Historian is fully loaded.', historian_loc)
 
-    def lookup_smiles(self, smiles, alreadyCanonical=False, isomericSmiles=True):
+    def lookup_smiles(self, smiles, alreadyCanonical=False, isomericSmiles=True, template_set='reaxys'):
         """Looks up number of occurances by SMILES.
 
         Tries it as-entered and then re-canonicalizes it in RDKit unless the
@@ -145,22 +139,28 @@ class ChemHistorian:
                 return default_result
             smiles = Chem.MolToSmiles(mol, isomericSmiles=isomericSmiles)
 
-        if self.hashed:
-            smiles = str(int(hashlib.md5(smiles.encode('utf-8')).hexdigest(), 16))
-
-        return_fields = {'as_reactant': 1, 'as_product': 1}
+        hashed_smiles = str(int(hashlib.md5(smiles.encode('utf-8')).hexdigest(), 16))
 
         if self.use_db:
             doc = self.CHEMICALS_DB.find_one(
-                {'smiles': smiles}, 
-                return_fields
+                {
+                    'smiles': {'$in': [smiles, hashed_smiles]},
+                    'template_set': template_set
+                }, 
+                {'as_reactant': 1, 'as_product': 1}
             )
             if doc:
                 return doc
             else:
                 return default_result
         else:
-            return self.occurrences.get(smiles, default_result)
+            result = self.occurrences.get(smiles, None)
+            if result is not None:
+                return result
+            result = self.occurrences.get(hashed_smiles, None)
+            if result is not None:
+                return result
+            return default_result
 
     def compress_keys(self):
         """Converts keys to hashed values to save space."""
@@ -170,11 +170,10 @@ class ChemHistorian:
             new_occurrences[k_compressed] = self.occurrences[k]
         del self.occurrences
         self.occurrences = new_occurrences
-        self.hashed = True
 
 
 if __name__ == '__main__':
-    chemhistorian = ChemHistorian(hashed=True)
+    chemhistorian = ChemHistorian()
     print('loading no refs, compressed')
     chemhistorian.load_from_file()
     print(chemhistorian.lookup_smiles('CCCCO'))

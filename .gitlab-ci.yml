@@ -6,24 +6,38 @@ services:
 variables:
   DOCKER_HOST: tcp://docker:2375
   DOCKER_DRIVER: overlay2
-  IMAGE_TAG: $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG
-  LATEST_TAG: $CI_REGISTRY_IMAGE:latest
 
 before_script:
+  - apk add git make
   - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
 
-build:
+build-dev:  # build dev branch for continuous deployment
   stage: build
   script:
-    - docker build -t $IMAGE_TAG .
-    - docker push $IMAGE_TAG
+    - make push VERSION=$(git describe --tags --always) REGISTRY=$CI_REGISTRY_IMAGE TAG=dev DATA_VERSION=dev
   only:
-    - /^release-.*$/
+    - dev
 
-build-latest:
+build-latest:  # build latest version of the master branch
   stage: build
   script:
-    - docker build -t $LATEST_TAG .
-    - docker push $LATEST_TAG
+    - make push VERSION=$(git describe --tags --abbrev=0) REGISTRY=$CI_REGISTRY_IMAGE TAG=latest DATA_VERSION=latest
   only:
-    - /^master$/
+    - master
+
+build-release:  # build all releases, as determined by tags
+  stage: build
+  script:
+    - make push VERSION=$CI_COMMIT_TAG REGISTRY=$CI_REGISTRY_IMAGE TAG=$CI_COMMIT_TAG DATA_VERSION=$CI_COMMIT_TAG
+  only:
+    - tags
+
+pages:  # update GitLab pages when pages branch is updated
+  stage: deploy
+  script:
+    - cp -r src public
+  artifacts:
+    paths:
+      - public
+  only:
+    - pages

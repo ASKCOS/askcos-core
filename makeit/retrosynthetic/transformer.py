@@ -12,6 +12,7 @@ import numpy as np
 from functools import partial  # used for passing args to multiprocessing
 from makeit.utilities.io.logger import MyLogger
 from makeit.utilities.cluster import cluster_precursors
+from makeit.utilities.descriptors import rms_molecular_weight, number_of_rings
 from makeit.interfaces.template_transformer import TemplateTransformer
 from makeit.prioritization.templates.relevance import RelevanceTemplatePrioritizer
 from makeit.prioritization.precursors.relevanceheuristic import RelevanceHeuristicPrecursorPrioritizer
@@ -57,13 +58,12 @@ class RetroTransformer(TemplateTransformer):
         use_db (bool): Whether to use the database to look up templates.
     """
 
-
     def __init__(
-        self, use_db=True, TEMPLATE_DB=None, load_all=gc.PRELOAD_TEMPLATES,
-        template_set='reaxys', template_prioritizer='reaxys', 
-        precursor_prioritizer='relevanceheuristic',
-        fast_filter='default', cluster='default',
-        cluster_settings={}
+            self, use_db=True, TEMPLATE_DB=None, load_all=gc.PRELOAD_TEMPLATES,
+            template_set='reaxys', template_prioritizer='reaxys',
+            precursor_prioritizer='relevanceheuristic',
+            fast_filter='default', cluster='default',
+            cluster_settings={}
     ):
         """Initializes RetroTransformer.
 
@@ -90,9 +90,8 @@ class RetroTransformer(TemplateTransformer):
         self.fast_filter = fast_filter
         self.cluster = cluster
         self.cluster_settings = cluster_settings
-        
-        super(RetroTransformer, self).__init__(load_all=load_all, use_db=use_db)
 
+        super(RetroTransformer, self).__init__(load_all=load_all, use_db=use_db)
 
     def load(self, template_filename=None):
         if template_filename is None:
@@ -105,13 +104,13 @@ class RetroTransformer(TemplateTransformer):
                 gc.RELEVANCE_TEMPLATE_PRIORITIZATION[self.template_prioritizer]['model_path']
             )
             self.template_prioritizer = template_prioritizer
-        
+
         if self.precursor_prioritizer == 'relevanceheuristic':
             MyLogger.print_and_log('Loading precursor prioritizer for RetroTransformer', retro_transformer_loc)
             self.precursor_prioritizer_object = RelevanceHeuristicPrecursorPrioritizer()
             self.precursor_prioritizer_object.load_model()
             self.precursor_prioritizer = self.precursor_prioritizer_object.reorder_precursors
-        
+
         if self.fast_filter == 'default':
             MyLogger.print_and_log('Loading fast filter for RetroTransformer', retro_transformer_loc)
             self.fast_filter_object = FastFilterScorer()
@@ -121,12 +120,15 @@ class RetroTransformer(TemplateTransformer):
         if self.cluster == 'default':
             MyLogger.print_and_log('Using default clustering for RetroTransformer', retro_transformer_loc)
             self.cluster = cluster_precursors
-        
+
         MyLogger.print_and_log('Loading retro-synthetic transformer', retro_transformer_loc)
         if self.use_db:
-            MyLogger.print_and_log('reading from db', retro_transformer_loc)
+            self.load_databases()
             try:
-                self.load_from_database()
+                self.TEMPLATE_DB.find_one({})  # check if connection to db exists
+                if self.load_all:
+                    self.load_from_database()
+                    self.use_db = False  # it doesn't make sense to load all templates into memory and then continue to use templates from DB
             except ServerSelectionTimeoutError:
                 MyLogger.print_and_log('cannot connect to db, reading from file instead', retro_transformer_loc)
                 self.use_db = False
@@ -134,12 +136,6 @@ class RetroTransformer(TemplateTransformer):
         else:
             MyLogger.print_and_log('reading from file', retro_transformer_loc)
             self.load_from_file(template_filename, self.template_set)
-
-        MyLogger.print_and_log(
-            'Retrosynthetic transformer has been loaded - using {} templates (may be multiple template sets!).'.format(
-                self.num_templates
-            ), retro_transformer_loc
-        )
 
     def get_one_template_by_idx(self, index, template_set=None):
         """Returns one template from given template set with given index.
@@ -170,16 +166,20 @@ class RetroTransformer(TemplateTransformer):
             )
         else:
             template = list(filter(
-                lambda x: x['template_set'] == template_set and x['index']==index,
+                lambda x: x['template_set'] == template_set and x['index'] == index,
                 self.templates
             ))
             if len(template) != 1:
                 raise ValueError('Duplicate templates found when trying to retrieve one unique template!')
             template = template[0]
-            print(template)
 
         if not self.load_all:
             template = self.doc_to_template(template)
+
+        if not template:
+            raise ValueError('Could not find template from template set "{}" with index "{}"'.format(
+                template_set, index
+            ))
 
         return template
 
@@ -192,7 +192,7 @@ class RetroTransformer(TemplateTransformer):
             indices (np.ndarray): Numpy array of indices to reorder templates.
 
         Returns:
-            List of templates ready to be applied (i.e. - with rxn object)
+            Generator of templates to be applied (i.e. - with rxn object)
 
         """
         if template_set is None:
@@ -218,18 +218,19 @@ class RetroTransformer(TemplateTransformer):
         templates.sort(key=lambda x: index_list.index(x['index']))
 
         if not self.load_all:
-            templates = [self.doc_to_template(temp) for temp in templates]
+            # return generator of templates with rchiralReaction if rdchiralReaction initialization was successful
+            templates = (x for x in (self.doc_to_template(temp) for temp in templates) if x.get('rxn'))
 
         return templates
 
     def get_outcomes(
             self, smiles, precursor_prioritizer=None,
-            template_set=None, template_prioritizer=None, 
-            fast_filter=None, fast_filter_threshold=0.75, 
-            max_num_templates=100, max_cum_prob=0.995, 
-            cluster=None, cluster_settings={}, 
+            template_set=None, template_prioritizer=None,
+            fast_filter=None, fast_filter_threshold=0.75,
+            max_num_templates=100, max_cum_prob=0.995,
+            cluster=None, cluster_settings={}, selec_check=False,
             **kwargs
-        ):
+    ):
         """Performs a one-step retrosynthesis given a SMILES string.
 
         Applies each transformation template sequentially to given target
@@ -260,6 +261,7 @@ class RetroTransformer(TemplateTransformer):
                 are cluster specific cluster settings.
             cluster_settings (optional, dict): Dictionary of cluster specific settings
                 to be passed to clustering method.
+            selec_check (optional, bool): Apply selectivity checking for the predicted precursors
             **kwargs: Additional kwargs to pass through to prioritizers or to
                 handle deprecated options.
 
@@ -273,7 +275,7 @@ class RetroTransformer(TemplateTransformer):
 
         if template_prioritizer is None:
             template_prioritizer = self.template_prioritizer
-        
+
         if precursor_prioritizer is None:
             precursor_prioritizer = self.precursor_prioritizer
 
@@ -300,19 +302,24 @@ class RetroTransformer(TemplateTransformer):
         templates = self.order_templates_by_indices(indices, template_set)
 
         for template, score in zip(templates, scores):
-            precursors = self.apply_one_template(mol, template)
+            precursors = self.apply_one_template(mol, template, record_rxn=selec_check)
             for precursor in precursors:
                 precursor['template_score'] = score
                 joined_smiles = '.'.join(precursor['smiles_split'])
+                precursor['rms_molwt'] = -rms_molecular_weight(joined_smiles)
+                precursor['num_rings'] = -number_of_rings(joined_smiles)
                 precursor['plausibility'] = fast_filter(joined_smiles, smiles)
                 # skip if no transformation happened or plausibility is below threshold
                 if joined_smiles == smiles or precursor['plausibility'] < fast_filter_threshold:
-                    continue 
+                    continue
                 if joined_smiles in smiles_to_index:
                     res = results[smiles_to_index[joined_smiles]]
                     res['tforms'] |= set([precursor['template_id']])
                     res['num_examples'] += precursor['num_examples']
-                    res['template_score'] = max(res['template_score'], score)
+                    if score > res['template_score']:
+                        if selec_check:
+                            res['reaction_smarts'] = precursor['reaction_smarts']
+                        res['template_score'] = score
                 else:
                     precursor['tforms'] = set([precursor['template_id']])
                     smiles_to_index[joined_smiles] = len(results)
@@ -324,9 +331,19 @@ class RetroTransformer(TemplateTransformer):
         cluster_ids = cluster(smiles, results, **cluster_settings)
         for (i, precursor) in enumerate(results):
             precursor['group_id'] = cluster_ids[i]
+            if selec_check:
+                mapped_products, mapped_precursors = self.apply_one_template_to_precursors(precursor['smiles'],
+                                                                                           precursor['reaction_smarts'])
+                other_products = [x for x in mapped_products if x != smiles]
+                if len(other_products) > 0:
+                    precursor['outcomes'] = '.'.join([smiles] + [x for x in other_products])
+                    precursor['mapped_outcomes'] = '.'.join([mapped_products[smiles]] + \
+                                                            [mapped_products[x] for x in other_products])
+                    precursor['mapped_precursors'] = mapped_precursors
+
         return results
 
-    def apply_one_template(self, mol, template):
+    def apply_one_template(self, mol, template, record_rxn=False):
         """Applies one template to a molecules and returns precursors.
 
         Args:
@@ -334,6 +351,7 @@ class RetroTransformer(TemplateTransformer):
                 the template to.
             template (dict): Dictionary representing template to apply. Must 
                 have 'rxn' key where value is a rdchiralReaction object.
+            record_rxn (bool): wether to include the reaction template smiles in the result
 
         Returns:
             List of dictionaries representing precursors generated from 
@@ -359,21 +377,53 @@ class RetroTransformer(TemplateTransformer):
             reacting_atoms = mapped_outcomes.get(
                 '.'.join(smiles_list), ('.'.join(smiles_list), (-1,))
             )
-            results.append({
+            result = {
                 'smiles': '.'.join(smiles_list),
                 'smiles_split': sorted(smiles_list),
                 'mapped_smiles': reacting_atoms[0],
                 'reacting_atoms': reacting_atoms[1],
                 'template_id': str(template['_id']),
                 'num_examples': template['count'],
-                'necessary_reagent': template['necessary_reagent']
-            })
+                'necessary_reagent': template['necessary_reagent'],
+            }
+            if record_rxn:
+                result['reaction_smarts'] = template['reaction_smarts']
+            results.append(result)
+
         return results
 
+    def apply_one_template_to_precursors(self, precursors, template):
+        """
+        Apply one backward template to precursors to get outcomes.
+
+        Args:
+            precursors (str): atom mapped smiles for precursors
+            template (str): backward template to be applied
+
+        Returns:
+            (dict) {smiles: mappedsmiles}
+        """
+        products, _, reactants = template.split('>')
+        forward_template = '({0})>>({1})'.format(reactants, products)
+        forward_rxn = rdchiralReaction(str(forward_template))
+        precursor_reacts = rdchiralReactants(precursors)
+
+        outcomes = rdchiralRun(forward_rxn, precursor_reacts, return_mapped=True)
+
+        if outcomes:
+            _, mapped_products = outcomes
+            mapped_products = {k: v[0] for k, v in mapped_products.items()}
+        else:
+            mapped_products = {}
+
+        mapped_precursors = Chem.MolToSmiles(precursor_reacts.reactants)
+
+        return mapped_products, mapped_precursors
+
     def apply_one_template_by_idx(
-        self, _id, smiles, template_idx, calculate_next_probs=True,
-        fast_filter_threshold=0.75, max_num_templates=100, max_cum_prob=0.995,
-        template_prioritizer=None, template_set=None, fast_filter=None
+            self, _id, smiles, template_idx, calculate_next_probs=True,
+            fast_filter_threshold=0.75, max_num_templates=100, max_cum_prob=0.995,
+            template_prioritizer=None, template_set=None, fast_filter=None
     ):
         """Applies one template by index.
 
@@ -404,7 +454,7 @@ class RetroTransformer(TemplateTransformer):
         """
         if template_prioritizer is None:
             template_prioritizer = self.template_prioritizer
-        
+
         if template_set is None:
             template_set = self.template_set
 
@@ -420,7 +470,11 @@ class RetroTransformer(TemplateTransformer):
         seen_reactant_combos = []
 
         template = self.get_one_template_by_idx(template_idx, template_set)
-        template['rxn'] = rdchiralReaction(template['reaction_smarts'])
+        try:
+            template['rxn'] = rdchiralReaction(template['reaction_smarts'])
+        except ValueError:
+            all_outcomes.append((_id, smiles, template_idx, [], 0.0))  # dummy outcome
+            return all_outcomes
 
         for precursor in self.apply_one_template(mol, template):
             reactant_smiles = precursor['smiles']
@@ -430,7 +484,7 @@ class RetroTransformer(TemplateTransformer):
             fast_filter_score = fast_filter(reactant_smiles, smiles)
             if fast_filter_score < fast_filter_threshold:
                 continue
-            
+
             reactants = []
             if calculate_next_probs:
                 for reactant_smi in precursor['smiles_split']:
@@ -448,16 +502,15 @@ class RetroTransformer(TemplateTransformer):
             else:
                 all_outcomes.append((_id, smiles, template_idx, precursor['smiles_split'], fast_filter_score))
         if not all_outcomes:
-            all_outcomes.append((_id, smiles, template_idx, [], 0.0)) # dummy outcome
+            all_outcomes.append((_id, smiles, template_idx, [], 0.0))  # dummy outcome
 
         return all_outcomes
 
 
 if __name__ == '__main__':
-
     MyLogger.initialize_logFile()
     t = RetroTransformer()
-    t.load()#chiral=True, refs=False, rxns=True)
+    t.load()  # chiral=True, refs=False, rxns=True)
     # def get_outcomes(
     #             self, smiles, precursor_prioritizer=None,
     #             template_set='reaxys', template_prioritizer=None, 
@@ -465,19 +518,20 @@ if __name__ == '__main__':
     #             max_num_templates=100, max_cum_prob=0.995, 
     #             cluster=None, cluster_settings={}, 
     #             **kwargs
-        # ):
-    #Test using a chiral molecule
+    # ):
+    # Test using a chiral molecule
     # outcomes = t.get_outcomes('CCOC(=O)[C@H]1C[C@@H](C(=O)N2[C@@H](c3ccccc3)CC[C@@H]2c2ccccc2)[C@@H](c2ccccc2)N1')#, \
     #     #100, (gc.relevanceheuristic, gc.relevance))
     # print(outcomes)
-
 
     # #Test using a molecule that give many precursors
     # outcomes = t.get_outcomes('CN(C)CCOC(c1ccccc1)c2ccccc2')#, \
     #     #100, (gc.relevanceheuristic, gc.relevance))
     # print(outcomes)
 
+    # test with one template
+    outcomes = t.apply_one_template_by_idx(1,
+                                           'CCOC(=O)[C@H]1C[C@@H](C(=O)N2[C@@H](c3ccccc3)CC[C@@H]2c2ccccc2)[C@@H](c2ccccc2)N1',
+                                           109659)
 
-    #test with one template
-    outcomes = t.apply_one_template_by_idx(1, 'CCOC(=O)[C@H]1C[C@@H](C(=O)N2[C@@H](c3ccccc3)CC[C@@H]2c2ccccc2)[C@@H](c2ccccc2)N1', 109659)
     print(outcomes)

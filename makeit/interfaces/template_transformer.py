@@ -234,8 +234,8 @@ class TemplateTransformer(object):
         to_retrieve = [
             '_id', 'reaction_smarts',
             'necessary_reagent', 'count', 
-            'intra_only', 'dimer_only', 'idex',
-            'references'
+            'intra_only', 'dimer_only', 'index',
+            'references', 'template_set'
         ]
         for document in self.TEMPLATE_DB.find({}, to_retrieve).sort('index', pymongo.ASCENDING):
             if self.load_all:

@@ -1,15 +1,18 @@
 import gzip
 import json
-import makeit.global_config as gc
+import os
+
 import pymongo
-from rdkit.Chem import AllChem
-from rdchiral.initialization import rdchiralReaction
-from pymongo import MongoClient
 from bson.objectid import ObjectId
+from pymongo import MongoClient
+from rdchiral.initialization import rdchiralReaction
+from rdkit.Chem import AllChem
+
+import makeit.global_config as gc
 from makeit.utilities.io.logger import MyLogger
+
 transformer_loc = 'template_transformer'
-import makeit.utilities.io.pickle as pickle
-import os, sys
+
 
 class TemplateTransformer(object):
     """One-step retrosynthesis transformer.

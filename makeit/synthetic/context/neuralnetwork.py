@@ -12,8 +12,6 @@ import pickle
 from rdkit import Chem
 contextRecommender_loc = 'contextRecommender'
 
-session = tf.Session()
-tf.keras.backend.set_session(session)
 
 class NeuralNetContextRecommender(ContextRecommender):
     """Reaction condition predictor based on Neural Network method
@@ -54,6 +52,9 @@ class NeuralNetContextRecommender(ContextRecommender):
         self.max_total_context = max_contexts
         self.max_context = 2
         self.fp_size = 2048
+
+        self.session = tf.Session()
+        tf.keras.backend.set_session(self.session)
 
     def load(self, model_path=gc.NEURALNET_CONTEXT_REC['model_path'], info_path=gc.NEURALNET_CONTEXT_REC[
                        'info_path'], weights_path=gc.NEURALNET_CONTEXT_REC['weights_path']):
@@ -316,8 +317,8 @@ class NeuralNetContextRecommender(ContextRecommender):
         s2_input_dum = np.zeros(self.s2_dim, dtype='float32').reshape(1, self.s2_dim)
         model_inputs = [pfp, rxnfp, c1_input_dum, r1_input_dum,
                             r2_input_dum, s1_input_dum, s2_input_dum]
-        with session.as_default():
-            with session.graph.as_default():
+        with self.session.as_default():
+            with self.session.graph.as_default():
                 fp_trans = self.fp_func(model_inputs)
                 if c1_input_user == []:
                     c1_inputs = fp_trans

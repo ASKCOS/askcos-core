@@ -1,6 +1,7 @@
 from functools import partial
 
 import tensorflow.compat.v1 as tf
+tf.disable_v2_behavior()
 from scipy.special import softmax
 
 from makeit import global_config as gc

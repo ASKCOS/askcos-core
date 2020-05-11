@@ -1,28 +1,17 @@
-import os
-from rdkit import Chem
-import makeit.global_config as gc
-import os, sys
-import makeit.utilities.io.pickle as pickle
+import rdkit.Chem as Chem
 from pymongo import MongoClient
 from pymongo.errors import ServerSelectionTimeoutError
+from rdchiral.initialization import rdchiralReaction, rdchiralReactants
+from rdchiral.main import rdchiralRun
 
-import rdkit.Chem as Chem
-from rdkit.Chem import AllChem
-import numpy as np
-from functools import partial  # used for passing args to multiprocessing
-from makeit.utilities.io.logger import MyLogger
+import makeit.global_config as gc
+from makeit.interfaces.template_transformer import TemplateTransformer
+from makeit.prioritization.precursors.relevanceheuristic import RelevanceHeuristicPrecursorPrioritizer
+from makeit.prioritization.templates.relevance import RelevanceTemplatePrioritizer
+from makeit.synthetic.evaluation.fast_filter import FastFilterScorer
 from makeit.utilities.cluster import cluster_precursors
 from makeit.utilities.descriptors import rms_molecular_weight, number_of_rings
-from makeit.interfaces.template_transformer import TemplateTransformer
-from makeit.prioritization.templates.relevance import RelevanceTemplatePrioritizer
-from makeit.prioritization.precursors.relevanceheuristic import RelevanceHeuristicPrecursorPrioritizer
-from makeit.synthetic.evaluation.fast_filter import FastFilterScorer
-from rdchiral.main import rdchiralRun
-from rdchiral.initialization import rdchiralReaction, rdchiralReactants
-from bson.objectid import ObjectId
-import pymongo
-from pymongo import MongoClient
-from pymongo.errors import ServerSelectionTimeoutError
+from makeit.utilities.io.logger import MyLogger
 
 retro_transformer_loc = 'retro_transformer'
 

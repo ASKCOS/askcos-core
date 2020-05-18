@@ -31,13 +31,3 @@ build-release:  # build all releases, as determined by tags
     - make push VERSION=$CI_COMMIT_TAG REGISTRY=$CI_REGISTRY_IMAGE TAG=$CI_COMMIT_TAG DATA_VERSION=$CI_COMMIT_TAG
   only:
     - tags
-
-pages:  # update GitLab pages when pages branch is updated
-  stage: deploy
-  script:
-    - cp -r src public
-  artifacts:
-    paths:
-      - public
-  only:
-    - pages

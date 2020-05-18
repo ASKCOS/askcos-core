@@ -22,9 +22,24 @@ main build:
 		-e 's/{GIT_HASH}/$(GIT_HASH)/g' \
 		-e 's/{GIT_DATE}/$(GIT_DATE)/g' \
 		-e 's/{GIT_DESCRIBE}/$(GIT_DESCRIBE)/g' \
-		Dockerfile | docker build -t $(REGISTRY):$(TAG) --build-arg DATA_VERSION=$(DATA_VERSION) -f - .
+		Dockerfile | docker build -t $(REGISTRY):$(TAG) \
+		--build-arg DATA_VERSION=$(DATA_VERSION) \
+		-f - .
 
-push: build
+build_ci:
+	@echo Building docker image: $(REGISTRY):$(TAG)
+	@sed \
+		-e 's/{VERSION}/$(VERSION)/g' \
+		-e 's/{GIT_HASH}/$(GIT_HASH)/g' \
+		-e 's/{GIT_DATE}/$(GIT_DATE)/g' \
+		-e 's/{GIT_DESCRIBE}/$(GIT_DESCRIBE)/g' \
+		Dockerfile | docker build -t $(REGISTRY):$(TAG) \
+		--cache-from $(REGISTRY):dev \
+		--build-arg BUILDKIT_INLINE_CACHE=1 \
+		--build-arg DATA_VERSION=$(DATA_VERSION) \
+		-f - .
+
+push: build_ci
 	@docker push $(REGISTRY):$(TAG)
 
 debug:

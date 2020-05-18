@@ -10,6 +10,7 @@ variables:
 before_script:
   - apk add git make
   - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+  - docker pull $CI_REGISTRY_IMAGE:dev || true  # pull dev image for build cache
 
 build-dev:  # build dev branch for continuous deployment
   stage: build

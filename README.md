@@ -134,6 +134,7 @@ The available arguments are as follows:
 * `-x, --reactions`: specify reactions data to seed, either `default` or path to data file
 * `-r, --retro-templates`: specify retrosynthetic templates to seed, either `default` or path to data file
 * `-f, --forward-templates`: specify forward templates to seed, either `default` or path to data file
+* `-l, --local`: use locally available docker images instead of pulling new image
 
 For example, to seed default buyables data and custom retrosynthetic pathways, run the following from the deploy folder:
 

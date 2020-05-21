@@ -134,6 +134,7 @@ The available arguments are as follows:
 * `-x, --reactions`: specify reactions data to seed, either `default` or path to data file
 * `-r, --retro-templates`: specify retrosynthetic templates to seed, either `default` or path to data file
 * `-f, --forward-templates`: specify forward templates to seed, either `default` or path to data file
+* `-l, --local`: use locally available docker images instead of pulling new image
 
 For example, to seed default buyables data and custom retrosynthetic pathways, run the following from the deploy folder:
 
@@ -188,6 +189,8 @@ $ docker build -t <image name> .
 ```
 
 __NOTE:__ The image name should correspond with what exists in the `docker-compose.yml` file. By default, the image name is environment variable `ASKCOS_IMAGE_REGISTRY` + `askcos`. If you choose to use a custom image name, make sure to modify the `ASKCOS_IMAGE_REGISTRY` variable or the `docker-compose.yml` file accordingly.
+
+__NOTE:__ When re-deploying the application after building a custom image with the same name/tag as one in our repository, you can supply the `--local` flag to the deployment script which will skip pulling the image from our container registry.
 
 ## Add Customization
 

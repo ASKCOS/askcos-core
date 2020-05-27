@@ -132,11 +132,8 @@ class RetroTransformer(TemplateTransformer):
         """
         if template_set is None:
             template_set = self.template_set
-            
-        template = list(filter(
-            lambda x: x['template_set'] == template_set and x['index'] == index,
-            self.templates
-        ))
+
+        template = [x for x in self.templates if x['index'] == index and x['template_set'] == template_set]
 
         if not template:
             raise ValueError('Could not find template from template set "{}" with index "{}"'.format(
@@ -169,10 +166,7 @@ class RetroTransformer(TemplateTransformer):
 
         index_list = indices.tolist()
 
-        templates = list(filter(
-            lambda x: x['template_set'] == template_set and x['index'] in indices,
-            self.templates
-        ))
+        templates = [x for x in self.templates if x['index'] in indices and x['template_set'] == template_set]
 
         templates.sort(key=lambda x: index_list.index(x['index']))
 

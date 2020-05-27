@@ -159,12 +159,7 @@ class TemplateTransformer(object):
             raise IOError('File not found to load template_transformer from!')
 
         if template_set is not None and template_set != 'all':
-            self.templates = list(
-                filter(
-                    lambda x: x.get('template_set') == template_set, 
-                    self.templates
-                )
-            )
+            self.templates = [x for x in self.templates if x.get('template_set') == template_set]
         
         for n, template in enumerate(self.templates):
             if self.load_all:

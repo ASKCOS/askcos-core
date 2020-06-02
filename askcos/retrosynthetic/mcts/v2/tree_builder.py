@@ -17,7 +17,8 @@ class MCTS:
 
     def __init__(self, pricer=None, retro_transformer=None, use_db=False,
                  template_set='reaxys', template_prioritizer='reaxys',
-                 precursor_prioritizer='relevanceheuristic', fast_filter='default'):
+                 precursor_prioritizer='relevanceheuristic',
+                 fast_filter='default', **kwargs):
 
         self.tree = nx.DiGraph()  # directed graph
 
@@ -35,20 +36,24 @@ class MCTS:
             fast_filter=fast_filter,
         )
 
-        self.template_max_count = 100
-        self.template_max_cum_prob = 0.995
+        # Retro transformer options
+        self.template_max_count = None
+        self.template_max_cum_prob = None
+        self.fast_filter_threshold = None
 
-        self.fast_filter_threshold = 0.75
-
-        self.max_branching = 10
-        self.max_depth = 3
-        self.exploration_weight = 1.0
-
-        self.max_ppg = 10
-
-        self.expansion_time = 20
+        # Tree generation options
+        self.expansion_time = None
         self.max_chemicals = None
         self.max_reactions = None
+        self.max_branching = None
+        self.max_depth = None
+        self.exploration_weight = None
+
+        # Terminal node criteria
+        self.max_ppg = None
+
+        # Parse any keyword arguments and set default options
+        self.set_options(**kwargs)
 
     @property
     def done(self):
@@ -60,6 +65,28 @@ class MCTS:
             or (self.max_chemicals is not None and len(self.chemicals) >= self.max_chemicals)
             or (self.max_reactions is not None and len(self.reactions) >= self.max_reactions)
         )
+
+    def set_options(self, **kwargs):
+        """
+        Parse keyword arguments and save options to corresponding attributes.
+
+        If no keyword arguments are provided, resets to default options.
+        """
+        # Retro transformer options
+        self.template_max_count = kwargs.get('template_max_count', 100)
+        self.template_max_cum_prob = kwargs.get('template_max_cum_prob', 0.995)
+        self.fast_filter_threshold = kwargs.get('fast_filter_threshold', 0.75)
+
+        # Tree generation options
+        self.expansion_time = kwargs.get('expansion_time', 30)
+        self.max_chemicals = kwargs.get('max_chemicals', None)
+        self.max_reactions = kwargs.get('max_reactions', None)
+        self.max_branching = kwargs.get('max_branching', 25)
+        self.max_depth = kwargs.get('max_depth', 10)
+        self.exploration_weight = kwargs.get('exploration_weight', 1.0)
+
+        # Terminal node criteria
+        self.max_ppg = kwargs.get('max_ppg', 1e6)
 
     def to_branching(self):
         """
@@ -97,10 +124,12 @@ class MCTS:
         retro_transformer.load()
         return retro_transformer
 
-    def build_tree(self, target):
+    def build_tree(self, target, **kwargs):
         """
         Build retrosynthesis tree by iterative expansion of precursor nodes.
         """
+        self.set_options(**kwargs)
+
         print('Initializing tree...')
         self._initialize(target)
 

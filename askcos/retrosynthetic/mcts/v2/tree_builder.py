@@ -225,6 +225,7 @@ class MCTS:
             if rxn is not None:
                 rxn_data = self.tree.nodes[rxn]
                 rxn_data['visit_count'] += 1
+                self._update_feasibility(rxn)
 
     def is_chemical_done(self, smiles, update=False):
         """
@@ -277,34 +278,51 @@ class MCTS:
         """
         chem_path = [self.target]
         rxn_path = []
+        invalid_options = set()
         template = None
         while template is None:
             leaf = chem_path[-1]
-            options, template_opt = self.ucb(leaf, chem_path, exploration_weight=self.exploration_weight)
+            options, template_options = self.ucb(leaf, chem_path, invalid_options, self.exploration_weight)
 
             if self.tree.out_degree(leaf) < self.max_branching:
-                options.extend(template_opt)
+                options.extend(template_options)
 
             if not options:
-                import pdb; pdb.set_trace()
+                # There are no valid options from this chemical node, we need to backtrack
+                invalid_options.add(leaf)
+                print(invalid_options)
+                del chem_path[-1]
+                del rxn_path[-1]
+                continue
 
             # Get the best option
             score, task = sorted(options, key=lambda x: x[0], reverse=True)[0]
 
             if isinstance(task, str):
                 # This is an already explored reaction, so we need to descend the tree
-                rxn_path.append(task)
                 # If there are multiple reactants, pick the one with the lower visit count
-                precursor = min((c for c in self.tree.successors(task) if not self.is_chemical_done(c)),
-                                key=lambda x: self.tree.nodes[x]['visit_count'])
-                chem_path.append(precursor)
+                # Do not consider chemicals that are already done or chemicals that are on the path
+                precursor = min(
+                    (c for c in self.tree.successors(task)
+                        if not self.is_chemical_done(c)
+                        and c not in invalid_options),
+                    key=lambda x: self.tree.nodes[x]['visit_count'],
+                    default=None,
+                )
+                if precursor is None:
+                    # There are no valid options from this reaction node, we need to backtrack
+                    invalid_options.add(task)
+                    continue
+                else:
+                    chem_path.append(precursor)
+                    rxn_path.append(task)
             else:
                 # This is a new template to apply
                 template = task
 
         return chem_path, rxn_path, template
 
-    def ucb(self, node, path, exploration_weight):
+    def ucb(self, node, path, invalid_options, exploration_weight):
         """
         Calculate UCB score for all exploration options from the specified node.
 
@@ -313,7 +331,7 @@ class MCTS:
 
         Returns a list of (score, option) tuples sorted by score.
         """
-        max_average_reward = 0
+        max_feasibility = 0
 
         reaction_options = []
         template_options = []
@@ -326,13 +344,13 @@ class MCTS:
         for rxn in self.tree.successors(node):
             rxn_data = self.tree.nodes[rxn]
 
-            if self.is_reaction_done(rxn) or len(set(self.tree.successors(rxn)) & set(path)) > 0:
+            if self.is_reaction_done(rxn) or len(set(self.tree.successors(rxn)) & set(path)) > 0 or rxn in invalid_options:
                 continue
 
-            average_reward = rxn_data['reward_avg']
-            max_average_reward = max(max_average_reward, average_reward)
+            feasibility = rxn_data['feasibility']
+            max_feasibility = max(max_feasibility, feasibility)
 
-            q_sa = -average_reward
+            q_sa = -feasibility
             template_probability = sum([templates[t] for t in rxn_data['templates']])
             u_sa = template_probability * visit_count / (1 + rxn_data['visit_count'])
 
@@ -344,15 +362,12 @@ class MCTS:
         # Get scores for unexplored templates
         for template in templates:
             if template not in explored:
-                q_sa = -(max_average_reward + 0.1)
+                q_sa = -(max_feasibility + 0.1)
                 u_sa = templates[template] * (1 + np.sqrt(visit_count))
                 score = q_sa + exploration_weight * u_sa
 
                 # The options here are to apply a new template to this chemical
                 template_options.append((score, template))
-
-        if not reaction_options and not template_options:
-            import pdb; pdb.set_trace()
 
         # Sort options from highest to lowest score
         reaction_options.sort(key=lambda x: x[0], reverse=True)
@@ -391,8 +406,8 @@ class MCTS:
         for reactant_list in precursors:
             # Check if this precursor meets the fast filter score threshold
             reactant_smiles = '.'.join(reactant_list)
-            score = self.retro_transformer.fast_filter(reactant_smiles, target)
-            if score < self.fast_filter_threshold:
+            ff_score = self.retro_transformer.fast_filter(reactant_smiles, target)
+            if ff_score < self.fast_filter_threshold:
                 continue
 
             for reactant in reactant_list:
@@ -400,11 +415,12 @@ class MCTS:
                 if False:
                     break
 
-                if reactant in path:
-                    # Avoid cycles
-                    break
-
-                if reactant not in self.chemicals:
+                if reactant in self.chemicals:
+                    # This is already in the tree somewhere, need to check whether we're creating a cycle
+                    if reactant in path or nx.has_path(self.tree, reactant, target):
+                        # This would create a cycle
+                        break
+                else:
                     # This is new, so create a Chemical node
                     self.create_chemical_node(reactant)
             else:
@@ -422,22 +438,14 @@ class MCTS:
                     rxn_data['template_score'] = max(rxn_data['template_score'], template_score)
                 else:
                     # This is new, so create a Reaction node
-                    self.reactions.append(reaction_smiles)
-                    self.tree.add_node(
-                        reaction_smiles,
-                        fast_filter_score=score,
-                        reward_avg=0.,
-                        reward_tot=0.,
-                        template_score=template_score,
-                        templates=[template],
-                        type='reaction',
-                        visit_count=0,
-                    )
+                    self.create_reaction_node(reaction_smiles, template, template_score, ff_score)
 
                 # Add edges to connect target -> reaction -> precursors
                 self.tree.add_edge(target, reaction_smiles)
                 for reactant in reactant_list:
                     self.tree.add_edge(reaction_smiles, reactant)
+
+                self._update_feasibility(reaction_smiles)
 
     def create_chemical_node(self, smiles):
         """
@@ -457,22 +465,64 @@ class MCTS:
         purchase_price = self.pricer.lookup_smiles(smiles, alreadyCanonical=False)
 
         terminal = self.is_terminal(smiles, purchase_price)
+        feasibility = 1 if terminal else -1
 
         self.chemicals.append(smiles)
         self.tree.add_node(
             smiles,
-            explored=[],
-            min_depth=None,
+            est_price=0.,             # estimated price of the chemical, based on price of buyable precursors
+            explored=[],              # list of explored templates
+            feasibility=feasibility,  # score for how feasible a route is, based on whether its precursors are terminal
+            feasibility_num=0,        # number of data points for feasibility
+            feasibility_sum=0,        # total feasibility value
+            min_depth=None,           # minimum depth at which this chemical appears in the tree
             purchase_price=purchase_price,
-            reward_avg=0.,
-            reward_tot=0.,
-            templates=templates,
-            terminal=terminal,
+            templates=templates,      # dict of template indices to relevance probabilities
+            terminal=terminal,        # whether this chemical meets terminal criterial
             type='chemical',
             visit_count=0,
         )
 
         self.is_chemical_done(smiles, update=True)
+
+    def create_reaction_node(self, smiles, template, template_score, ff_score):
+        """
+        Create a new reaction node from the provided smiles and data.
+        """
+        self.reactions.append(smiles)
+        self.tree.add_node(
+            smiles,
+            est_price=0.,       # estimated price of the reaction, based on price of buyable precursors
+            feasibility=-1,     # score for how feasible a route is, based on whether its precursors are terminal
+            feasibility_num=0,  # number of data points for feasibility
+            feasibility_sum=0,  # total feasibility value
+            ff_score=ff_score,
+            template_score=template_score,
+            templates=[template],
+            type='reaction',
+            visit_count=0,
+        )
+
+    def _update_feasibility(self, smiles):
+        """
+        Update the feasibility metrics for the specified node.
+        """
+        rxn_data = self.tree.nodes[smiles]
+
+        if rxn_data['type'] == 'reaction':
+            # Calculate feasibility score as the sum of the feasibility of all precursors
+            feasibility = sum(self.tree.nodes[c]['feasibility'] for c in self.tree.successors(smiles))
+
+            # Update average feasibility value
+            rxn_data['feasibility_sum'] += feasibility
+            rxn_data['feasibility_num'] += 1
+            rxn_data['feasibility'] = rxn_data['feasibility_sum'] / rxn_data['feasibility_num']
+
+            # Update average feasibility value of parent chemical
+            chem_data = self.tree.nodes[next(self.tree.predecessors(smiles))]
+            chem_data['feasibility_sum'] += feasibility
+            chem_data['feasibility_num'] += 1
+            chem_data['feasibility'] = chem_data['feasibility_sum'] / chem_data['feasibility_num']
 
     def is_terminal(self, smiles, ppg):
         """

@@ -95,7 +95,8 @@ class MCTS:
         branching = nx.dag_to_branching(self.tree)
         # Copy node attributes from original graph
         for node, data in branching.nodes(data=True):
-            smiles = data['source']
+            smiles = data.pop('source')
+            data['smiles'] = smiles
             data.update(self.tree.nodes[smiles])
         return branching
 
@@ -529,7 +530,7 @@ class MCTS:
             return all(_path.nodes[v]['terminal'] for v in leaves)
 
         tree = self.to_branching()
-        target = [n for n, s in tree.nodes(data='source') if s == self.target][0]
+        target = [n for n, s in tree.nodes(data='smiles') if s == self.target][0]
 
         paths = (path for path in get_paths(tree, target, max_depth=self.max_depth) if _validate_path(path))
 

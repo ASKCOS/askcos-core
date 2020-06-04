@@ -570,7 +570,7 @@ class MCTS:
 
         return is_terminal
 
-    def get_buyable_paths(self, fmt='json'):
+    def get_buyable_paths(self, fmt='json', sorting_metric='plausibility'):
         """
         Return list of paths to buyables starting from the target node.
         """
@@ -584,10 +584,12 @@ class MCTS:
 
         paths = (path for path in get_paths(tree, target, max_depth=self.max_depth) if _validate_path(path))
 
-        if fmt == 'json':
+        paths = sort_paths(paths, sorting_metric)  # also converts to a list
+
+        if fmt == 'graph':
+            pass  # already in graph format
+        elif fmt == 'json':
             paths = [nx.tree_data(path, target) for path in paths]
-        elif fmt == 'graph':
-            paths = list(paths)
         else:
             raise ValueError('Unrecognized format type {0}'.format(fmt))
 
@@ -629,3 +631,29 @@ def get_paths(tree, root, max_depth=None):
 
     for path in get_chem_paths(root):
         yield path
+
+
+def sort_paths(paths, metric):
+    """
+    Sort paths by some metric.
+    """
+
+    def number_of_starting_materials(tree):
+        return len([v for v, d in tree.out_degree() if d == 0])
+
+    def number_of_reactions(tree):
+        return len([v for v in nx.dag_longest_path(tree) if tree.nodes[v]['type'] == 'reaction'])
+
+    def overall_plausibility(tree):
+        return np.prod([d['ff_score'] for v, d in tree.nodes(data=True) if d['type'] == 'reaction'])
+
+    if metric == 'plausibility':
+        paths = sorted(paths, key=lambda x: overall_plausibility(x), reverse=True)
+    elif metric == 'number_of_starting_materials':
+        paths = sorted(paths, key=lambda x: number_of_starting_materials(x))
+    elif metric == 'number_of_reactions':
+        paths = sorted(paths, key=lambda x: number_of_reactions(x))
+    else:
+        raise ValueError('Need something to sort by! Invalid option provided: {}'.format(metric))
+
+    return paths

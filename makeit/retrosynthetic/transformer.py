@@ -52,7 +52,7 @@ class RetroTransformer(TemplateTransformer):
             template_set='reaxys', template_prioritizer='reaxys',
             precursor_prioritizer='relevanceheuristic',
             fast_filter='default', cluster='default',
-            cluster_settings={}
+            cluster_settings=None,
     ):
         """Initializes RetroTransformer.
 
@@ -78,7 +78,7 @@ class RetroTransformer(TemplateTransformer):
         self.precursor_prioritizer = precursor_prioritizer
         self.fast_filter = fast_filter
         self.cluster = cluster
-        self.cluster_settings = cluster_settings
+        self.cluster_settings = cluster_settings or {}
 
         super(RetroTransformer, self).__init__(load_all=load_all, use_db=use_db)
 
@@ -217,8 +217,8 @@ class RetroTransformer(TemplateTransformer):
             template_set=None, template_prioritizer=None,
             fast_filter=None, fast_filter_threshold=0.75,
             max_num_templates=100, max_cum_prob=0.995,
-            cluster=None, cluster_settings={}, selec_check=False,
-            **kwargs
+            cluster_precursors=True, cluster=None, cluster_settings=None,
+            selec_check=False, **kwargs
     ):
         """Performs a one-step retrosynthesis given a SMILES string.
 
@@ -243,6 +243,7 @@ class RetroTransformer(TemplateTransformer):
                 as arguments and returns a score on the range [0.0, 1.0].
             fast_filter_threshold (float): Fast filter threshold to filter
                 bad predictions. 1.0 means use all templates.
+            cluster_precursors (optional, bool): Whether to run clustering
             cluster (optional, callable): Use to override cluster method.
                 This can be any callable that accepts 
                 (target, outcomes, **cluster_settings) where target is a smiles 
@@ -268,13 +269,13 @@ class RetroTransformer(TemplateTransformer):
         if precursor_prioritizer is None:
             precursor_prioritizer = self.precursor_prioritizer
 
-        if fast_filter == None:
+        if fast_filter is None:
             fast_filter = self.fast_filter
 
-        if cluster == None:
+        if cluster is None:
             cluster = self.cluster
 
-        if cluster_settings == None:
+        if cluster_settings is None:
             cluster_settings = self.cluster_settings
 
         mol = Chem.MolFromSmiles(smiles)
@@ -317,9 +318,11 @@ class RetroTransformer(TemplateTransformer):
             result['tforms'] = list(result['tforms'])
             result['rank'] = rank
         results = precursor_prioritizer(results)
-        cluster_ids = cluster(smiles, results, **cluster_settings)
+        if cluster_precursors:
+            cluster_ids = cluster(smiles, results, **cluster_settings)
         for (i, precursor) in enumerate(results):
-            precursor['group_id'] = cluster_ids[i]
+            if cluster_precursors:
+                precursor['group_id'] = cluster_ids[i]
             if selec_check:
                 mapped_products, mapped_precursors = self.apply_one_template_to_precursors(precursor['smiles'],
                                                                                            precursor['reaction_smarts'])

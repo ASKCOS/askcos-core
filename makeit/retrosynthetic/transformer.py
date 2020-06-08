@@ -323,6 +323,10 @@ class RetroTransformer(TemplateTransformer):
             if selec_check:
                 mapped_products, mapped_precursors = self.apply_one_template_to_precursors(precursor['smiles'],
                                                                                            precursor['reaction_smarts'])
+                if smiles not in mapped_products:
+                    # We couldn't recover the original product for some reason
+                    precursor['selec_error'] = True
+                    continue
                 other_products = [x for x in mapped_products if x != smiles]
                 if len(other_products) > 0:
                     precursor['outcomes'] = '.'.join([smiles] + [x for x in other_products])

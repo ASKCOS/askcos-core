@@ -1,5 +1,6 @@
 import itertools
 import time
+from collections import OrderedDict
 
 import networkx as nx
 import numpy as np
@@ -177,7 +178,6 @@ class MCTS:
         self.create_chemical_node(self.target)
         self.tree.nodes[self.target]['terminal'] = False
         self.tree.nodes[self.target]['done'] = False
-        self.tree.nodes[self.target]['visit_count'] += 1
 
     def _rollout(self):
         """
@@ -282,10 +282,7 @@ class MCTS:
         template = None
         while template is None:
             leaf = chem_path[-1]
-            options, template_options = self.ucb(leaf, chem_path, invalid_options, self.exploration_weight)
-
-            if self.tree.out_degree(leaf) < self.max_branching:
-                options.extend(template_options)
+            options = self.ucb(leaf, chem_path, invalid_options, self.exploration_weight)
 
             if not options:
                 # There are no valid options from this chemical node, we need to backtrack
@@ -296,7 +293,7 @@ class MCTS:
                 continue
 
             # Get the best option
-            score, task = sorted(options, key=lambda x: x[0], reverse=True)[0]
+            score, task = options[0]
 
             if isinstance(task, str):
                 # This is an already explored reaction, so we need to descend the tree
@@ -333,12 +330,11 @@ class MCTS:
         """
         max_feasibility = 0
 
-        reaction_options = []
-        template_options = []
+        options = []
 
         templates = self.tree.nodes[node]['templates']
         explored = self.tree.nodes[node]['explored']
-        visit_count = self.tree.nodes[node]['visit_count']
+        product_visits = self.tree.nodes[node]['visit_count']
 
         # Get scores for explored templates (reaction node exists)
         for rxn in self.tree.successors(node):
@@ -352,28 +348,29 @@ class MCTS:
 
             q_sa = -feasibility
             template_probability = sum([templates[t] for t in rxn_data['templates']])
-            u_sa = template_probability * visit_count / (1 + rxn_data['visit_count'])
+            u_sa = template_probability * np.sqrt(product_visits) / (1 + rxn_data['visit_count'])
 
             score = q_sa + exploration_weight * u_sa
 
             # The options here are to follow a reaction down one level
-            reaction_options.append((score, rxn))
+            options.append((score, rxn))
 
-        # Get scores for unexplored templates
-        for template in templates:
-            if template not in explored:
-                q_sa = -(max_feasibility + 0.1)
-                u_sa = templates[template] * (1 + np.sqrt(visit_count))
-                score = q_sa + exploration_weight * u_sa
+        # Get score for most relevant unexplored template
+        if self.tree.out_degree(node) < self.max_branching or node == self.target:
+            for template_index in templates:
+                if template_index not in explored:
+                    q_sa = -(max_feasibility + 0.1)
+                    u_sa = templates[template_index] * np.sqrt(product_visits)
+                    score = q_sa + exploration_weight * u_sa
 
-                # The options here are to apply a new template to this chemical
-                template_options.append((score, template))
+                    # The options here are to apply a new template to this chemical
+                    options.append((score, template_index))
+                    break
 
         # Sort options from highest to lowest score
-        reaction_options.sort(key=lambda x: x[0], reverse=True)
-        template_options.sort(key=lambda x: x[0], reverse=True)
+        options.sort(key=lambda x: x[0], reverse=True)
 
-        return reaction_options, template_options
+        return options
 
     def _get_precursors(self, chemical, template_idx):
         """
@@ -460,7 +457,7 @@ class MCTS:
             self.template_max_count,
             self.template_max_cum_prob
         )
-        templates = {i: p for i, p in zip(indices, probs)}
+        templates = OrderedDict(zip(indices, probs))
 
         purchase_price = self.pricer.lookup_smiles(smiles, alreadyCanonical=False)
 

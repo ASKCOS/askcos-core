@@ -459,17 +459,16 @@ class MCTS:
         )
         templates = OrderedDict(zip(indices, probs))
 
-        purchase_price = self.pricer.lookup_smiles(smiles, alreadyCanonical=False)
+        purchase_price = self.pricer.lookup_smiles(smiles, alreadyCanonical=True)
 
         terminal = self.is_terminal(smiles, purchase_price)
-        feasibility = 1 if terminal else -1
 
         self.chemicals.append(smiles)
         self.tree.add_node(
             smiles,
             est_price=0.,             # estimated price of the chemical, based on price of buyable precursors
             explored=[],              # list of explored templates
-            feasibility=feasibility,  # score for how feasible a route is, based on whether its precursors are terminal
+            feasibility=1,            # score for how feasible a route is, based on whether its precursors are terminal
             feasibility_num=0,        # number of data points for feasibility
             feasibility_sum=0,        # total feasibility value
             min_depth=None,           # minimum depth at which this chemical appears in the tree

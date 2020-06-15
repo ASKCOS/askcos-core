@@ -31,7 +31,7 @@ class MCTS:
 
         self.pricer = pricer or self.load_pricer(use_db)
         self.chemhistorian = chemhistorian or self.load_chemhistorian(use_db)
-        self.scscorer = scscorer or self.load_scscorer()
+        self.scscorer = scscorer or self.load_scscorer(pricer=self.pricer)
         self.retro_transformer = retro_transformer or self.load_retro_transformer(
             use_db=use_db,
             template_set=template_set,
@@ -132,11 +132,11 @@ class MCTS:
         return pricer
 
     @staticmethod
-    def load_scscorer():
+    def load_scscorer(pricer=None):
         """
         Loads pricer.
         """
-        scscorer = SCScorePrecursorPrioritizer()
+        scscorer = SCScorePrecursorPrioritizer(pricer=pricer)
         scscorer.load_model(model_tag='1024bool')
         return scscorer
 

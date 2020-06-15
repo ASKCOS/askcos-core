@@ -30,7 +30,7 @@ class SCScorePrecursorPrioritizer(Prioritizer):
         pricer (Pricer or None): Pricer instance to lookup chemical costs.
     """
 
-    def __init__(self, score_scale=5.0):
+    def __init__(self, score_scale=5.0, pricer=None):
         """Initializes SCScorePrecursorPrioritizer.
 
         Args:
@@ -41,7 +41,7 @@ class SCScorePrecursorPrioritizer(Prioritizer):
         self.FP_rad = 2
         self.score_scale = score_scale
         self._restored = False
-        self.pricer = None
+        self.pricer = pricer
         self._loaded = False
 
     def load_model(self, FP_len=1024, model_tag='1024bool'):
@@ -101,8 +101,10 @@ class SCScorePrecursorPrioritizer(Prioritizer):
                                                                       useChirality=True), dtype=np.bool)
         self.mol_to_fp = mol_to_fp
 
-        self.pricer = Pricer()
-        self.pricer.load()
+        if self.pricer is None:
+            self.pricer = Pricer()
+            self.pricer.load()
+
         self._restored = True
         self._loaded = True
 

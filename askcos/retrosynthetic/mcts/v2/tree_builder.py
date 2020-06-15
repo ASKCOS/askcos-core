@@ -159,6 +159,13 @@ class MCTS:
         retro_transformer.load()
         return retro_transformer
 
+    def get_buyable_paths(self, target, **kwargs):
+        """
+        Build retrosynthesis tree and return paths to buyable precursors.
+        """
+        self.build_tree(target, **kwargs)
+        return self.enumerate_paths(**kwargs)
+
     def build_tree(self, target, **kwargs):
         """
         Build retrosynthesis tree by iterative expansion of precursor nodes.
@@ -599,7 +606,7 @@ class MCTS:
 
         return all(results['and']) or any(results['or'])
 
-    def get_buyable_paths(self, fmt='json', sorting_metric='plausibility'):
+    def enumerate_paths(self, fmt='json', sorting_metric='plausibility', validate=True, **kwargs):
         """
         Return list of paths to buyables starting from the target node.
         """
@@ -611,7 +618,10 @@ class MCTS:
         tree = self.to_branching()
         target = [n for n, s in tree.nodes(data='smiles') if s == self.target][0]
 
-        paths = (path for path in get_paths(tree, target, max_depth=self.max_depth) if _validate_path(path))
+        if validate:
+            paths = (path for path in get_paths(tree, target, max_depth=self.max_depth) if _validate_path(path))
+        else:
+            paths = (path for path in get_paths(tree, target, max_depth=self.max_depth))
 
         paths = sort_paths(paths, sorting_metric)  # also converts to a list
 

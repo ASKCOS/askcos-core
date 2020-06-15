@@ -225,7 +225,7 @@ class MCTS:
             if rxn is not None:
                 rxn_data = self.tree.nodes[rxn]
                 rxn_data['visit_count'] += 1
-                self._update_feasibility(rxn)
+                self._update_value(rxn)
 
     def is_chemical_done(self, smiles, update=False):
         """
@@ -328,8 +328,6 @@ class MCTS:
 
         Returns a list of (score, option) tuples sorted by score.
         """
-        max_feasibility = 0
-
         options = []
 
         templates = self.tree.nodes[node]['templates']
@@ -343,12 +341,14 @@ class MCTS:
             if self.is_reaction_done(rxn) or len(set(self.tree.successors(rxn)) & set(path)) > 0 or rxn in invalid_options:
                 continue
 
-            feasibility = rxn_data['feasibility']
-            max_feasibility = max(max_feasibility, feasibility)
-
-            q_sa = -feasibility
+            est_value = rxn_data['est_value']
+            node_visits = rxn_data['visit_count']
             template_probability = sum([templates[t] for t in rxn_data['templates']])
-            u_sa = template_probability * np.sqrt(product_visits) / (1 + rxn_data['visit_count'])
+
+            # Q represents how good a move is
+            q_sa = template_probability * est_value / node_visits
+            # U represents how many times this move has been explored
+            u_sa = np.sqrt(np.log(product_visits) / node_visits)
 
             score = q_sa + exploration_weight * u_sa
 
@@ -359,8 +359,8 @@ class MCTS:
         if self.tree.out_degree(node) < self.max_branching or node == self.target:
             for template_index in templates:
                 if template_index not in explored:
-                    q_sa = -(max_feasibility + 0.1)
-                    u_sa = templates[template_index] * np.sqrt(product_visits)
+                    q_sa = templates[template_index]
+                    u_sa = np.sqrt(np.log(product_visits))
                     score = q_sa + exploration_weight * u_sa
 
                     # The options here are to apply a new template to this chemical
@@ -442,7 +442,7 @@ class MCTS:
                 for reactant in reactant_list:
                     self.tree.add_edge(reaction_smiles, reactant)
 
-                self._update_feasibility(reaction_smiles)
+                self._update_value(reaction_smiles)
 
     def create_chemical_node(self, smiles):
         """
@@ -462,21 +462,20 @@ class MCTS:
         purchase_price = self.pricer.lookup_smiles(smiles, alreadyCanonical=True)
 
         terminal = self.is_terminal(smiles, purchase_price)
+        est_value = 1. if terminal else 0.
 
         self.chemicals.append(smiles)
         self.tree.add_node(
             smiles,
             est_price=0.,             # estimated price of the chemical, based on price of buyable precursors
+            est_value=est_value,      # total value of node
             explored=[],              # list of explored templates
-            feasibility=1,            # score for how feasible a route is, based on whether its precursors are terminal
-            feasibility_num=0,        # number of data points for feasibility
-            feasibility_sum=0,        # total feasibility value
             min_depth=None,           # minimum depth at which this chemical appears in the tree
             purchase_price=purchase_price,
             templates=templates,      # dict of template indices to relevance probabilities
             terminal=terminal,        # whether this chemical meets terminal criterial
             type='chemical',
-            visit_count=0,
+            visit_count=1,
         )
 
         self.is_chemical_done(smiles, update=True)
@@ -489,36 +488,30 @@ class MCTS:
         self.tree.add_node(
             smiles,
             est_price=0.,       # estimated price of the reaction, based on price of buyable precursors
-            feasibility=-1,     # score for how feasible a route is, based on whether its precursors are terminal
-            feasibility_num=0,  # number of data points for feasibility
-            feasibility_sum=0,  # total feasibility value
+            est_value=0.,       # score for how feasible a route is, based on whether its precursors are terminal
             ff_score=ff_score,
             template_score=template_score,
             templates=[template],
             type='reaction',
-            visit_count=0,
+            visit_count=1,
         )
 
-    def _update_feasibility(self, smiles):
+    def _update_value(self, smiles):
         """
-        Update the feasibility metrics for the specified node.
+        Update the value of the specified reaction node and its parent.
         """
         rxn_data = self.tree.nodes[smiles]
 
         if rxn_data['type'] == 'reaction':
-            # Calculate feasibility score as the sum of the feasibility of all precursors
-            feasibility = sum(self.tree.nodes[c]['feasibility'] for c in self.tree.successors(smiles))
+            # Calculate value as the sum of the values of all precursors
+            est_value = sum(self.tree.nodes[c]['est_value'] for c in self.tree.successors(smiles))
 
-            # Update average feasibility value
-            rxn_data['feasibility_sum'] += feasibility
-            rxn_data['feasibility_num'] += 1
-            rxn_data['feasibility'] = rxn_data['feasibility_sum'] / rxn_data['feasibility_num']
+            # Update estimated value of reaction
+            rxn_data['est_value'] += est_value
 
-            # Update average feasibility value of parent chemical
+            # Update estimated value of parent chemical
             chem_data = self.tree.nodes[next(self.tree.predecessors(smiles))]
-            chem_data['feasibility_sum'] += feasibility
-            chem_data['feasibility_num'] += 1
-            chem_data['feasibility'] = chem_data['feasibility_sum'] / chem_data['feasibility_num']
+            chem_data['est_value'] += est_value
 
     def is_terminal(self, smiles, ppg):
         """

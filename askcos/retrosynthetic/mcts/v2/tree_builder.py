@@ -1,22 +1,23 @@
 import itertools
 import time
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 
 import networkx as nx
 import numpy as np
 from rdkit import Chem
 from rdchiral.initialization import rdchiralReaction, rdchiralReactants
 
-import makeit.global_config as gc
+from makeit.prioritization.precursors.scscore import SCScorePrecursorPrioritizer
 from makeit.retrosynthetic.transformer import RetroTransformer
 from makeit.utilities.buyable.pricer import Pricer
-from makeit.prioritization.templates.relevance import RelevanceTemplatePrioritizer
+from makeit.utilities.historian.chemicals import ChemHistorian
 
 
 class MCTS:
     """Monte Carlo Tree Search"""
 
-    def __init__(self, pricer=None, retro_transformer=None, use_db=False,
+    def __init__(self, pricer=None, chemhistorian=None, scscorer=None,
+                 retro_transformer=None, use_db=False,
                  template_set='reaxys', template_prioritizer='reaxys',
                  precursor_prioritizer='relevanceheuristic',
                  fast_filter='default', **kwargs):
@@ -29,6 +30,8 @@ class MCTS:
         self.reactions = []  # list of reaction smiles
 
         self.pricer = pricer or self.load_pricer(use_db)
+        self.chemhistorian = chemhistorian or self.load_chemhistorian(use_db)
+        self.scscorer = scscorer or self.load_scscorer()
         self.retro_transformer = retro_transformer or self.load_retro_transformer(
             use_db=use_db,
             template_set=template_set,
@@ -36,6 +39,7 @@ class MCTS:
             precursor_prioritizer=precursor_prioritizer,
             fast_filter=fast_filter,
         )
+        self.template_set = template_set
 
         # Retro transformer options
         self.template_max_count = None
@@ -52,6 +56,10 @@ class MCTS:
 
         # Terminal node criteria
         self.max_ppg = None
+        self.max_scscore = None
+        self.max_elements = None
+        self.min_history = None
+        self.termination_logic = None
 
         # Parse any keyword arguments and set default options
         self.set_options(**kwargs)
@@ -87,7 +95,11 @@ class MCTS:
         self.exploration_weight = kwargs.get('exploration_weight', 1.0)
 
         # Terminal node criteria
-        self.max_ppg = kwargs.get('max_ppg', 1e6)
+        self.max_ppg = kwargs.get('max_ppg', None)
+        self.max_scscore = kwargs.get('max_scscore', None)
+        self.max_elements = kwargs.get('max_elements', None)
+        self.min_history = kwargs.get('min_history', None)
+        self.termination_logic = kwargs.get('termination_logic', {})
 
     def to_branching(self):
         """
@@ -102,6 +114,15 @@ class MCTS:
         return branching
 
     @staticmethod
+    def load_chemhistorian(use_db):
+        """
+        Loads chemhistorian.
+        """
+        chemhistorian = ChemHistorian(use_db=use_db)
+        chemhistorian.load()
+        return chemhistorian
+
+    @staticmethod
     def load_pricer(use_db):
         """
         Loads pricer.
@@ -109,6 +130,15 @@ class MCTS:
         pricer = Pricer(use_db=use_db)
         pricer.load()
         return pricer
+
+    @staticmethod
+    def load_scscorer():
+        """
+        Loads pricer.
+        """
+        scscorer = SCScorePrecursorPrioritizer()
+        scscorer.load_model(model_tag='1024bool')
+        return scscorer
 
     @staticmethod
     def load_retro_transformer(use_db, template_set='reaxys', template_prioritizer='reaxys',
@@ -461,12 +491,16 @@ class MCTS:
 
         purchase_price = self.pricer.lookup_smiles(smiles, alreadyCanonical=True)
 
-        terminal = self.is_terminal(smiles, purchase_price)
+        hist = self.chemhistorian.lookup_smiles(smiles, alreadyCanonical=True, template_set=self.template_set)
+
+        terminal = self.is_terminal(smiles, purchase_price, hist)
         est_value = 1. if terminal else 0.
 
         self.chemicals.append(smiles)
         self.tree.add_node(
             smiles,
+            as_reactant=hist['as_reactant'],
+            as_product=hist['as_product'],
             est_price=0.,             # estimated price of the chemical, based on price of buyable precursors
             est_value=est_value,      # total value of node
             explored=[],              # list of explored templates
@@ -513,7 +547,7 @@ class MCTS:
             chem_data = self.tree.nodes[next(self.tree.predecessors(smiles))]
             chem_data['est_value'] += est_value
 
-    def is_terminal(self, smiles, ppg):
+    def is_terminal(self, smiles, ppg=None, hist=None):
         """
         Determine if the specified chemical is a terminal node in the tree based
         on pre-specified criteria.
@@ -526,38 +560,36 @@ class MCTS:
             ppg (float): cost of the chemical
             hist (dict): historian data for the chemical
         """
-        # Default to False
-        is_terminal = False
+        # Default to buyability
+        results = {'and': [bool(ppg)], 'or': []}
 
-        if self.max_ppg is not None:
-            is_buyable = ppg and (ppg <= self.max_ppg)
-            is_terminal = is_buyable
+        if self.max_ppg is not None and ppg is not None:
+            logic = self.termination_logic.get('max_ppg', 'and')
+            results[logic].append(ppg <= self.max_ppg)
 
-        # if self.max_natom_dict is not None:
-        #     # Get structural properties
-        #     mol = Chem.MolFromSmiles(smiles)
-        #     if mol:
-        #         natom_dict = defaultdict(lambda: 0)
-        #         for a in mol.GetAtoms():
-        #             natom_dict[a.GetSymbol()] += 1
-        #         natom_dict['H'] = sum(a.GetTotalNumHs() for a in mol.GetAtoms())
-        #         is_small_enough = all(natom_dict[k] <= v for k, v in self.max_natom_dict.items() if k != 'logic')
-        #
-        #         if self.max_natom_dict['logic'] == 'or':
-        #             is_terminal = is_terminal or is_small_enough
-        #         elif self.max_natom_dict['logic'] == 'and':
-        #             is_terminal = is_terminal and is_small_enough
-        #
-        # if self.min_chemical_history_dict is not None:
-        #     is_popular_enough = hist['as_reactant'] >= self.min_chemical_history_dict['as_reactant'] or \
-        #                         hist['as_product'] >= self.min_chemical_history_dict['as_product']
-        #
-        #     if self.min_chemical_history_dict['logic'] == 'or':
-        #         is_terminal = is_terminal or is_popular_enough
-        #     elif self.min_chemical_history_dict['logic'] == 'and':
-        #         is_terminal = is_terminal and is_popular_enough
+        if self.max_scscore is not None:
+            scscore = self.scscorer.get_score_from_smiles(smiles, noprice=True)
+            logic = self.termination_logic.get('max_scscore', 'or')
+            results[logic].append(scscore <= self.max_scscore)
 
-        return is_terminal
+        if self.max_elements is not None:
+            # Get structural properties
+            mol = Chem.MolFromSmiles(smiles)
+            if mol:
+                elem_dict = defaultdict(lambda: 0)
+                for a in mol.GetAtoms():
+                    elem_dict[a.GetSymbol()] += 1
+                elem_dict['H'] = sum(a.GetTotalNumHs() for a in mol.GetAtoms())
+
+                logic = self.termination_logic.get('max_elements', 'or')
+                results[logic].append(all(elem_dict[k] <= v for k, v in self.max_elements.items()))
+
+        if self.min_history is not None and hist is not None:
+            logic = self.termination_logic.get('min_history', 'or')
+            results[logic].append(hist['as_reactant'] >= self.min_history['as_reactant'] or
+                                  hist['as_product'] >= self.min_history['as_product'])
+
+        return all(results['and']) or any(results['or'])
 
     def get_buyable_paths(self, fmt='json', sorting_metric='plausibility'):
         """

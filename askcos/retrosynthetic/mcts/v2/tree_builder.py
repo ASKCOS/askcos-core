@@ -53,6 +53,7 @@ class MCTS:
         self.max_branching = None
         self.max_depth = None
         self.exploration_weight = None
+        self.return_first = None
 
         # Terminal node criteria
         self.max_ppg = None
@@ -73,6 +74,7 @@ class MCTS:
             self.is_chemical_done(self.target)
             or (self.max_chemicals is not None and len(self.chemicals) >= self.max_chemicals)
             or (self.max_reactions is not None and len(self.reactions) >= self.max_reactions)
+            or (self.return_first and self.tree.nodes[self.target]['solved'])
         )
 
     def set_options(self, **kwargs):
@@ -93,6 +95,7 @@ class MCTS:
         self.max_branching = kwargs.get('max_branching', 25)
         self.max_depth = kwargs.get('max_depth', 10)
         self.exploration_weight = kwargs.get('exploration_weight', 1.0)
+        self.return_first = kwargs.get('return_first', False)
 
         # Terminal node criteria
         self.max_ppg = kwargs.get('max_ppg', None)
@@ -208,6 +211,7 @@ class MCTS:
         self.create_chemical_node(self.target)
         self.tree.nodes[self.target]['terminal'] = False
         self.tree.nodes[self.target]['done'] = False
+        self.tree.nodes[self.target]['solved'] = False
 
     def _rollout(self):
         """
@@ -501,11 +505,11 @@ class MCTS:
             smiles,
             as_reactant=hist['as_reactant'],
             as_product=hist['as_product'],
-            est_price=0.,             # estimated price of the chemical, based on price of buyable precursors
             est_value=est_value,      # total value of node
             explored=[],              # list of explored templates
             min_depth=None,           # minimum depth at which this chemical appears in the tree
             purchase_price=purchase_price,
+            solved=terminal,          # whether a path to terminal leaves has been found from this node
             templates=templates,      # dict of template indices to relevance probabilities
             terminal=terminal,        # whether this chemical meets terminal criterial
             type='chemical',
@@ -521,9 +525,9 @@ class MCTS:
         self.reactions.append(smiles)
         self.tree.add_node(
             smiles,
-            est_price=0.,       # estimated price of the reaction, based on price of buyable precursors
             est_value=0.,       # score for how feasible a route is, based on whether its precursors are terminal
             ff_score=ff_score,
+            solved=False,             # whether a path to terminal leaves has been found from this node
             template_score=template_score,
             templates=[template],
             type='reaction',
@@ -546,6 +550,10 @@ class MCTS:
             # Update estimated value of parent chemical
             chem_data = self.tree.nodes[next(self.tree.predecessors(smiles))]
             chem_data['est_value'] += est_value
+
+            # Check if this node is solved
+            solved = rxn_data['solved'] or all(self.tree.nodes[c]['solved'] for c in self.tree.successors(smiles))
+            chem_data['solved'] = rxn_data['solved'] = solved
 
     def is_terminal(self, smiles, ppg=None, hist=None):
         """

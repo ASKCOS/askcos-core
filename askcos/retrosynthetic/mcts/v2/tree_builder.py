@@ -65,6 +65,7 @@ class MCTS:
         self.max_depth = None
         self.exploration_weight = None
         self.return_first = None
+        self.max_trees = None
 
         # Terminal node criteria
         self.max_ppg = None
@@ -107,6 +108,7 @@ class MCTS:
         self.max_depth = kwargs.get('max_depth', 10)
         self.exploration_weight = kwargs.get('exploration_weight', 1.0)
         self.return_first = kwargs.get('return_first', False)
+        self.max_trees = kwargs.get('max_trees', None)
 
         # Terminal node criteria
         self.max_ppg = kwargs.get('max_ppg', None)
@@ -654,6 +656,11 @@ class MCTS:
             paths = (path for path in get_paths(tree, target, max_depth=self.max_depth))
 
         paths = sort_paths(paths, sorting_metric)  # also converts to a list
+
+        print('Found {0} paths to buyable chemicals.'.format(len(paths)))
+
+        if self.max_trees is not None:
+            paths = paths[:self.max_trees]
 
         if path_format == 'graph':
             pass  # already in graph format

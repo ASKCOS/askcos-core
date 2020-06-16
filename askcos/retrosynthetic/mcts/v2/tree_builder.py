@@ -66,6 +66,8 @@ class MCTS:
         self.exploration_weight = None
         self.return_first = None
         self.max_trees = None
+        self.banned_chemicals = None
+        self.banned_reactions = None
 
         # Terminal node criteria
         self.max_ppg = None
@@ -109,6 +111,8 @@ class MCTS:
         self.exploration_weight = kwargs.get('exploration_weight', 1.0)
         self.return_first = kwargs.get('return_first', False)
         self.max_trees = kwargs.get('max_trees', None)
+        self.banned_chemicals = kwargs.get('banned_chemicals', [])
+        self.banned_reactions = kwargs.get('banned_reactions', [])
 
         # Terminal node criteria
         self.max_ppg = kwargs.get('max_ppg', None)
@@ -471,17 +475,23 @@ class MCTS:
         4. Create and register Reaction objects
         """
         for reactant_list in precursors:
-            # Check if this precursor meets the fast filter score threshold
             reactant_smiles = '.'.join(reactant_list)
+            reaction_smiles = reactant_smiles + '>>' + target
+
+            # Check if this precursor meets the fast filter score threshold
             ff_score = self.fast_filter(reactant_smiles, target)
             if ff_score < self.fast_filter_threshold:
                 continue
 
-            for reactant in reactant_list:
-                # TODO: Check banned molecules
-                if False:
-                    break
+            # Check if the reaction is banned
+            if reaction_smiles in self.banned_reactions:
+                continue
 
+            # Check if any precursors are banned
+            if any(reactant in self.banned_chemicals for reactant in reactant_list):
+                continue
+
+            for reactant in reactant_list:
                 if reactant in self.chemicals:
                     # This is already in the tree somewhere, need to check whether we're creating a cycle
                     if reactant in path or nx.has_path(self.tree, reactant, target):
@@ -491,12 +501,7 @@ class MCTS:
                     # This is new, so create a Chemical node
                     self.create_chemical_node(reactant)
             else:
-                reaction_smiles = reactant_smiles + '>>' + target
                 template_score = self.tree.nodes[target]['templates'][template]
-
-                # TODO: Check banned reactions
-                if False:
-                    continue
 
                 if reaction_smiles in self.reactions:
                     # This reaction already exists

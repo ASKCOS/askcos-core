@@ -1,4 +1,5 @@
 import itertools
+import json
 import time
 from collections import OrderedDict, defaultdict
 
@@ -223,6 +224,18 @@ class MCTS:
         self.tree.clear()
         self.chemicals = []
         self.reactions = []
+
+    def dump_tree(self):
+        """
+        Serialize entire tree to json.
+        """
+        return json.dumps(nx.node_link_data(self.tree))
+
+    def load_tree(self, data):
+        """
+        Deserialize and parse tree from json.
+        """
+        self.tree = nx.node_link_graph(json.loads(data))
 
     def _initialize(self, target):
         """
@@ -511,7 +524,7 @@ class MCTS:
             max_num_templates=self.template_max_count,
             max_cum_prob=self.template_max_cum_prob,
         )
-        templates = OrderedDict(zip(indices, probs))
+        templates = OrderedDict(zip(indices.tolist(), probs.tolist()))
 
         purchase_price = self.pricer.lookup_smiles(smiles, alreadyCanonical=True)
 

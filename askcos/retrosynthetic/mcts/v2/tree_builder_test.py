@@ -95,7 +95,7 @@ class TestMCTS(unittest.TestCase):
         options = {
             'max_ppg': 10,
             'min_history': {'as_reactant': 10, 'as_product': 10},
-            'termination_logic': {'max_ppg': 'or', 'min_history': 'or'}
+            'termination_logic': {'max_ppg': 'and', 'min_history': 'or'}
         }
         self.mcts.set_options(**options)
         self.assertTrue(self.mcts.is_terminal('C', ppg=1, hist={'as_reactant': 12, 'as_product': 12}))
@@ -139,7 +139,6 @@ class TestMCTS(unittest.TestCase):
 
         node_data = self.mcts.tree.nodes[self.target]
         self.assertIsInstance(node_data, dict)
-        self.assertEqual(node_data['est_price'], 0)
         self.assertEqual(node_data['est_value'], 1)
         self.assertEqual(node_data['explored'], [])
         self.assertIsNone(node_data['min_depth'])
@@ -160,7 +159,6 @@ class TestMCTS(unittest.TestCase):
 
         node_data = self.mcts.tree.nodes[rxn]
         self.assertIsInstance(node_data, dict)
-        self.assertEqual(node_data['est_price'], 0)
         self.assertEqual(node_data['est_value'], 0)
         self.assertEqual(node_data['ff_score'], 0.9)
         self.assertEqual(node_data['template_score'], 0.5)

@@ -615,6 +615,9 @@ class MCTS:
             leaves = (v for v, d in _path.out_degree() if d == 0)
             return all(_path.nodes[v]['terminal'] for v in leaves)
 
+        # Resolve template data before doing any node duplication
+        self.retrieve_template_data()
+
         tree = self.to_branching()
         target = [n for n, s in tree.nodes(data='smiles') if s == self.target][0]
 
@@ -633,6 +636,24 @@ class MCTS:
             raise ValueError('Unrecognized format type {0}'.format(fmt))
 
         return paths
+
+    def retrieve_template_data(self):
+        """
+        Retrieve template data for all reaction nodes using template ids.
+        """
+        for rxn in self.reactions:
+            rxn_data = self.tree.nodes[rxn]
+            template_ids = rxn_data['templates']
+            if self.retro_transformer.load_all or not self.retro_transformer.use_db:
+                templates = [self.retro_transformer.templates[tid] for tid in template_ids]
+            else:
+                templates = list(self.retro_transformer.TEMPLATE_DB.find({
+                    'index': {'$in': template_ids},
+                    'template_set': self.template_set,
+                }))
+            rxn_data['tforms'] = [str(t.get('_id', -1)) for t in templates]
+            rxn_data['num_examples'] = int(sum([t.get('count', 1) for t in templates]))
+            rxn_data['necessary_reagent'] = templates[0].get('necessary_reagent', '')
 
 
 def get_paths(tree, root, max_depth=None):

@@ -7,11 +7,6 @@ import numpy as np
 from rdkit import Chem
 from rdchiral.initialization import rdchiralReaction, rdchiralReactants
 
-from makeit.prioritization.precursors.scscore import SCScorePrecursorPrioritizer
-from makeit.retrosynthetic.transformer import RetroTransformer
-from makeit.utilities.buyable.pricer import Pricer
-from makeit.utilities.historian.chemicals import ChemHistorian
-
 
 class MCTS:
     """Monte Carlo Tree Search"""
@@ -29,9 +24,20 @@ class MCTS:
         self.chemicals = []  # list of chemical smiles
         self.reactions = []  # list of reaction smiles
 
+        # Models and databases
         self.pricer = pricer or self.load_pricer(use_db)
         self.chemhistorian = chemhistorian or self.load_chemhistorian(use_db)
         self.scscorer = scscorer or self.load_scscorer(pricer=self.pricer)
+
+        # If template prioritizer or fast filter are provided, don't load them
+        if template_prioritizer is not None and not isinstance(template_prioritizer, str):
+            self.template_prioritizer = template_prioritizer
+            template_prioritizer = None
+
+        if fast_filter is not None and not isinstance(fast_filter, str):
+            self.fast_filter = fast_filter
+            fast_filter = None
+
         self.retro_transformer = retro_transformer or self.load_retro_transformer(
             use_db=use_db,
             template_set=template_set,
@@ -39,6 +45,10 @@ class MCTS:
             precursor_prioritizer=precursor_prioritizer,
             fast_filter=fast_filter,
         )
+        if isinstance(template_prioritizer, str):
+            self.template_prioritizer = self.retro_transformer.template_prioritizer
+        if isinstance(template_prioritizer, str):
+            self.fast_filter = self.retro_transformer.fast_filter
         self.template_set = template_set
 
         # Retro transformer options
@@ -121,6 +131,7 @@ class MCTS:
         """
         Loads chemhistorian.
         """
+        from makeit.utilities.historian.chemicals import ChemHistorian
         chemhistorian = ChemHistorian(use_db=use_db)
         chemhistorian.load()
         return chemhistorian
@@ -130,6 +141,7 @@ class MCTS:
         """
         Loads pricer.
         """
+        from makeit.utilities.buyable.pricer import Pricer
         pricer = Pricer(use_db=use_db)
         pricer.load()
         return pricer
@@ -139,6 +151,7 @@ class MCTS:
         """
         Loads pricer.
         """
+        from makeit.prioritization.precursors.scscore import SCScorePrecursorPrioritizer
         scscorer = SCScorePrecursorPrioritizer(pricer=pricer)
         scscorer.load_model(model_tag='1024bool')
         return scscorer
@@ -149,6 +162,7 @@ class MCTS:
         """
         Loads retro transformer model.
         """
+        from makeit.retrosynthetic.transformer import RetroTransformer
         retro_transformer = RetroTransformer(
             use_db=use_db,
             template_set=template_set,
@@ -444,7 +458,7 @@ class MCTS:
         for reactant_list in precursors:
             # Check if this precursor meets the fast filter score threshold
             reactant_smiles = '.'.join(reactant_list)
-            ff_score = self.retro_transformer.fast_filter(reactant_smiles, target)
+            ff_score = self.fast_filter(reactant_smiles, target)
             if ff_score < self.fast_filter_threshold:
                 continue
 
@@ -492,11 +506,10 @@ class MCTS:
 
         Includes template relevance probabilities and purchase price.
         """
-        template_prioritizer = self.retro_transformer.template_prioritizer
-        probs, indices = template_prioritizer.predict(
+        probs, indices = self.template_prioritizer.predict(
             smiles,
-            self.template_max_count,
-            self.template_max_cum_prob
+            max_num_templates=self.template_max_count,
+            max_cum_prob=self.template_max_cum_prob,
         )
         templates = OrderedDict(zip(indices, probs))
 

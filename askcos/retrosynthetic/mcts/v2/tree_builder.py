@@ -606,7 +606,8 @@ class MCTS:
 
         return all(results['and']) or any(results['or'])
 
-    def enumerate_paths(self, fmt='json', sorting_metric='plausibility', validate=True, **kwargs):
+    def enumerate_paths(self, path_format='json', sorting_metric='plausibility',
+                        validate_paths=True, convert_json=True, **kwargs):
         """
         Return list of paths to buyables starting from the target node.
         """
@@ -621,19 +622,21 @@ class MCTS:
         tree = self.to_branching()
         target = [n for n, s in tree.nodes(data='smiles') if s == self.target][0]
 
-        if validate:
+        if validate_paths:
             paths = (path for path in get_paths(tree, target, max_depth=self.max_depth) if _validate_path(path))
         else:
             paths = (path for path in get_paths(tree, target, max_depth=self.max_depth))
 
         paths = sort_paths(paths, sorting_metric)  # also converts to a list
 
-        if fmt == 'graph':
+        if path_format == 'graph':
             pass  # already in graph format
-        elif fmt == 'json':
+        elif path_format == 'json':
             paths = [nx.tree_data(path, target) for path in paths]
+            if convert_json:
+                paths = [translate_json(path) for path in paths]
         else:
-            raise ValueError('Unrecognized format type {0}'.format(fmt))
+            raise ValueError('Unrecognized format type {0}'.format(path_format))
 
         return paths
 
@@ -717,3 +720,40 @@ def sort_paths(paths, metric):
         raise ValueError('Need something to sort by! Invalid option provided: {}'.format(metric))
 
     return paths
+
+
+def translate_json(path):
+    """
+    Convert json output from networkx to match output of old tree builder.
+
+    Input should be a deserialized python object, not a raw json string.
+    """
+    key_map = {
+        'smiles': 'smiles',
+        'id': 'id',
+        'as_reactant': 'as_reactant',
+        'as_product': 'as_product',
+        'ff_score': 'plausibility',
+        'purchase_price': 'ppg',
+        'template_score': 'template_score',
+        'tforms': 'tforms',
+        'num_examples': 'num_examples',
+        'necessary_reagent': 'necessary_reagent',
+    }
+
+    output = {}
+    for key, value in path.items():
+        if key in key_map:
+            output[key_map[key]] = value
+        elif key == 'type':
+            if value == 'chemical':
+                output['is_chemical'] = True
+            elif value == 'reaction':
+                output['is_reaction'] = True
+        elif key == 'children':
+            output['children'] = [translate_json(c) for c in value]
+
+    if 'children' not in output:
+        output['children'] = []
+
+    return output

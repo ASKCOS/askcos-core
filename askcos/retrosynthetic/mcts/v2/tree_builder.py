@@ -26,6 +26,7 @@ class MCTS:
         self.reactions = []  # list of reaction smiles
 
         self.iterations = 0
+        self.time_to_solve = 0
 
         # Models and databases
         self.pricer = pricer or self.load_pricer(use_db)
@@ -92,7 +93,6 @@ class MCTS:
             or (self.max_iterations is not None and self.iterations >= self.max_iterations)
             or (self.max_chemicals is not None and len(self.chemicals) >= self.max_chemicals)
             or (self.max_reactions is not None and len(self.reactions) >= self.max_reactions)
-            or (self.return_first and self.tree.nodes[self.target]['solved'])
         )
 
     def set_options(self, **kwargs):
@@ -206,27 +206,38 @@ class MCTS:
         elapsed_time = time.time() - start_time
 
         while elapsed_time < self.expansion_time and not self.done:
-            print('.', end='')
             self._rollout()
-            self.iterations += 1
+
             elapsed_time = time.time() - start_time
 
-        print('\nTree expansion complete.')
+            self.iterations += 1
+            if self.iterations % 100 == 0:
+                print('Iteration {0} ({1:.2f}s): |C| = {2} |R| = {3}'.format(self.iterations, elapsed_time, len(self.chemicals), len(self.reactions)))
+
+            if not self.time_to_solve and self.tree.nodes[self.target]['solved']:
+                self.time_to_solve = elapsed_time
+                print('Found first pathway after {:.2f} seconds.'.format(elapsed_time))
+                if self.return_first:
+                    print('Stopping expansion to return first pathway.')
+                    break
+
+        print('Tree expansion complete.')
         self.print_stats()
 
     def print_stats(self):
         """
         Print tree statistics.
         """
-        info = ''
+        info = '\n'
+        info += 'Number of iterations: {0}\n'.format(self.iterations)
         num_nodes = self.tree.number_of_nodes()
-        info += "Number of nodes: {0:d}\n".format(num_nodes)
-        info += "    Chemical nodes: {0:d}\n".format(len(self.chemicals))
-        info += "    Reaction nodes: {0:d}\n".format(len(self.reactions))
-        info += "Number of edges: {0:d}\n".format(self.tree.number_of_edges())
+        info += 'Number of nodes: {0:d}\n'.format(num_nodes)
+        info += '    Chemical nodes: {0:d}\n'.format(len(self.chemicals))
+        info += '    Reaction nodes: {0:d}\n'.format(len(self.reactions))
+        info += 'Number of edges: {0:d}\n'.format(self.tree.number_of_edges())
         if num_nodes > 0:
-            info += "Average in degree: {0:.4f}\n".format(sum(d for _, d in self.tree.in_degree()) / num_nodes)
-            info += "Average out degree: {0:.4f}".format(sum(d for _, d in self.tree.out_degree()) / num_nodes)
+            info += 'Average in degree: {0:.4f}\n'.format(sum(d for _, d in self.tree.in_degree()) / num_nodes)
+            info += 'Average out degree: {0:.4f}'.format(sum(d for _, d in self.tree.out_degree()) / num_nodes)
         print(info)
 
     def clear(self):

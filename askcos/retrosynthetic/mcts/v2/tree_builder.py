@@ -640,7 +640,8 @@ class MCTS:
         return all(results['and']) or any(results['or'])
 
     def enumerate_paths(self, path_format='json', sorting_metric='plausibility',
-                        validate_paths=True, convert_json=True, **kwargs):
+                        validate_paths=True, convert_json=True,
+                        max_depth=None, max_trees=None, **kwargs):
         """
         Return list of paths to buyables starting from the target node.
         """
@@ -652,24 +653,21 @@ class MCTS:
         # Resolve template data before doing any node duplication
         self.retrieve_template_data()
 
-        tree = self.to_branching()
-        target = [n for n, s in tree.nodes(data='smiles') if s == self.target][0]
-
-        if validate_paths:
-            paths = (path for path in get_paths(tree, target, max_depth=self.max_depth) if _validate_path(path))
-        else:
-            paths = (path for path in get_paths(tree, target, max_depth=self.max_depth))
+        paths = get_paths(
+            self.tree, self.target,
+            max_depth=max_depth or self.max_depth,
+            max_trees=max_trees or self.max_trees,
+            validation_fn=_validate_path if validate_paths else None,
+        )
 
         paths = sort_paths(paths, sorting_metric)  # also converts to a list
 
         print('Found {0} paths to buyable chemicals.'.format(len(paths)))
 
-        if self.max_trees is not None:
-            paths = paths[:self.max_trees]
-
         if path_format == 'graph':
             pass  # already in graph format
         elif path_format == 'json':
+            target = [n for n, s in paths[0].nodes(data='smiles') if s == self.target][0]
             paths = [nx.tree_data(path, target) for path in paths]
             if convert_json:
                 paths = [translate_json(path) for path in paths]
@@ -697,41 +695,48 @@ class MCTS:
             rxn_data['necessary_reagent'] = templates[0].get('necessary_reagent', '')
 
 
-def get_paths(tree, root, max_depth=None):
+def get_paths(tree, root, max_depth=None, max_trees=None, validation_fn=None):
     """
     Return generator of all paths from the root node as `nx.DiGraph` objects.
 
-    Designed for true tree where each node only has one parent.
     All node attributes are copied to the output paths.
     """
-    def get_chem_paths(_node, _depth=0):
+    def get_chem_paths(_node, _uuid, _depth=0):
         """
         Return generator of paths with current node as the root.
         """
         if tree.out_degree(_node) == 0 or max_depth is not None and _depth >= max_depth:
             sub_path = nx.DiGraph()
-            sub_path.add_node(_node, **tree.nodes[_node])
+            sub_path.add_node(_uuid, smiles=_node, **tree.nodes[_node])
             yield sub_path
         else:
             for rxn in tree.successors(_node):
-                for sub_path in get_rxn_paths(rxn, _depth + 1):
-                    sub_path.add_node(_node, **tree.nodes[_node])
-                    sub_path.add_edge(_node, rxn)
+                rxn_uuid = nx.utils.generate_unique_node()
+                for sub_path in get_rxn_paths(rxn, rxn_uuid, _depth + 1):
+                    sub_path.add_node(_uuid, smiles=_node, **tree.nodes[_node])
+                    sub_path.add_edge(_uuid, rxn_uuid)
                     yield sub_path
 
-    def get_rxn_paths(_node, _depth=0):
+    def get_rxn_paths(_node, _uuid, _depth=0):
         """
         Return generator of paths with current node as root.
         """
-        for path_combo in itertools.product(*(get_chem_paths(c, _depth) for c in tree.successors(_node))):
+        c_uuid = {c: nx.utils.generate_unique_node() for c in tree.successors(_node)}
+        for path_combo in itertools.product(*(get_chem_paths(c, c_uuid[c], _depth) for c in tree.successors(_node))):
             sub_path = nx.union_all(path_combo)
-            sub_path.add_node(_node, **tree.nodes[_node])
+            sub_path.add_node(_uuid, smiles=_node, **tree.nodes[_node])
             for c in tree.successors(_node):
-                sub_path.add_edge(_node, c)
+                sub_path.add_edge(_uuid, c_uuid[c])
             yield sub_path
 
-    for path in get_chem_paths(root):
-        yield path
+    root_uuid = nx.utils.generate_unique_node()
+    num_paths = 0
+    for path in get_chem_paths(root, root_uuid):
+        if max_trees is not None and num_paths >= max_trees:
+            break
+        if validation_fn is None or validation_fn(path):
+            num_paths += 1
+            yield path
 
 
 def sort_paths(paths, metric):

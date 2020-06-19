@@ -25,6 +25,8 @@ class MCTS:
         self.chemicals = []  # list of chemical smiles
         self.reactions = []  # list of reaction smiles
 
+        self.iterations = 0
+
         # Models and databases
         self.pricer = pricer or self.load_pricer(use_db)
         self.chemhistorian = chemhistorian or self.load_chemhistorian(use_db)
@@ -59,6 +61,7 @@ class MCTS:
 
         # Tree generation options
         self.expansion_time = None
+        self.max_iterations = None
         self.max_chemicals = None
         self.max_reactions = None
         self.max_branching = None
@@ -86,6 +89,7 @@ class MCTS:
         """
         return (
             self.is_chemical_done(self.target)
+            or (self.max_iterations is not None and self.iterations >= self.max_iterations)
             or (self.max_chemicals is not None and len(self.chemicals) >= self.max_chemicals)
             or (self.max_reactions is not None and len(self.reactions) >= self.max_reactions)
             or (self.return_first and self.tree.nodes[self.target]['solved'])
@@ -104,6 +108,7 @@ class MCTS:
 
         # Tree generation options
         self.expansion_time = kwargs.get('expansion_time', 30)
+        self.max_iterations = kwargs.get('max_iterations', None)
         self.max_chemicals = kwargs.get('max_chemicals', None)
         self.max_reactions = kwargs.get('max_reactions', None)
         self.max_branching = kwargs.get('max_branching', 25)
@@ -203,6 +208,7 @@ class MCTS:
         while elapsed_time < self.expansion_time and not self.done:
             print('.', end='')
             self._rollout()
+            self.iterations += 1
             elapsed_time = time.time() - start_time
 
         print('\nTree expansion complete.')

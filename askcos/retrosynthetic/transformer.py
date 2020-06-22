@@ -399,12 +399,15 @@ class RetroTransformer(TemplateTransformer):
         Returns:
             (dict) {smiles: mappedsmiles}
         """
-        products, _, reactants = template.split('>')
-        forward_template = '({0})>>({1})'.format(reactants, products)
-        forward_rxn = rdchiralReaction(str(forward_template))
-        precursor_reacts = rdchiralReactants(precursors)
+        try:
+            products, _, reactants = template.split('>')
+            forward_template = '({0})>>({1})'.format(reactants, products)
+            forward_rxn = rdchiralReaction(str(forward_template))
+            precursor_reacts = rdchiralReactants(precursors)
 
-        outcomes = rdchiralRun(forward_rxn, precursor_reacts, return_mapped=True)
+            outcomes = rdchiralRun(forward_rxn, precursor_reacts, return_mapped=True)
+        except Exception as e:
+            return {}, None
 
         if outcomes:
             _, mapped_products = outcomes

@@ -17,6 +17,7 @@ from askcos.utilities.buyable.pricer import Pricer
 from askcos.utilities.formats import chem_dict, rxn_dict
 from askcos.utilities.io.logger import MyLogger
 from askcos.utilities.historian.chemicals import ChemHistorian
+from askcos.prioritization.precursors.scscore import SCScorePrecursorPrioritizer
 from askcos.prioritization.templates.relevance import RelevanceTemplatePrioritizer
 from askcos.synthetic.evaluation.fast_filter import FastFilterScorer
 
@@ -51,7 +52,8 @@ class MCTS:
 
     """
 
-    def __init__(self, retroTransformer=None, pricer=None, max_branching=20, max_depth=3, expansion_time=60,
+    def __init__(self, retroTransformer=None, pricer=None, scscorer=None,
+                 max_branching=20, max_depth=3, expansion_time=60,
                  chemhistorian=None, nproc=8, num_active_pathways=None, template_set='reaxys',
                  template_prioritizer='reaxys', precursor_prioritizer='relevanceheuristic', fast_filter='default',
                  **kwargs):
@@ -109,11 +111,14 @@ class MCTS:
         self.filter_threshold = None
         self.apply_fast_filter = None
         self.max_ppg = None
-        self.max_natom_dict = None
-        self.min_chemical_history_dict = None
+        self.max_scscore = None
+        self.max_elements = None
+        self.min_history = None
+        self.termination_logic = None
 
         # Load data and models
         self.pricer = pricer or self.load_pricer(kwargs.get('use_db', False))
+        self.scscorer = scscorer or self.load_scscorer(pricer=self.pricer)
         self.chemhistorian = chemhistorian or self.load_chemhistorian(kwargs.get('use_db', False))
         self.retroTransformer = retroTransformer or self.load_retro_transformer(
             template_set=template_set,
@@ -137,6 +142,15 @@ class MCTS:
         pricer = Pricer(use_db=use_db)
         pricer.load()
         return pricer
+
+    @staticmethod
+    def load_scscorer(pricer=None):
+        """
+        Loads pricer.
+        """
+        scscorer = SCScorePrecursorPrioritizer(pricer=pricer)
+        scscorer.load_model(model_tag='1024bool')
+        return scscorer
 
     @staticmethod
     def load_chemhistorian(use_db):
@@ -1061,8 +1075,10 @@ class MCTS:
                           forbidden_molecules=None,
                           template_count=100,
                           max_cum_template_prob=0.995,
-                          max_natom_dict=None,
-                          min_chemical_history_dict=None,
+                          max_scscore=None,
+                          max_elements=None,
+                          min_history=None,
+                          termination_logic=None,
                           apply_fast_filter=True,
                           filter_threshold=0.75,
                           soft_reset=False,
@@ -1100,11 +1116,11 @@ class MCTS:
                 to consider. (default: {100})
             max_cum_template_prob (float, optional): Maximum cumulative
                 probability of selected relevant templates. (default: {0.995})
-            max_natom_dict (defaultdict, optional): Specifies maximum amounts
+            max_elements (defaultdict, optional): Specifies maximum amounts
                 for certain atoms and the logic it should use to select a
                 chemical (buyable, buyable or max atoms, buyable and max atoms).
                 (default: None)
-            min_chemical_history_dict (dict, optional): Minimum number of times
+            min_history (dict, optional): Minimum number of times
                 a chemical must appear as a reactant or product to be selected
                 when logic is "OR" and chemical is not buyable.
                 (default: None)
@@ -1142,8 +1158,10 @@ class MCTS:
         self.apply_fast_filter = apply_fast_filter
 
         self.max_ppg = max_ppg
-        self.max_natom_dict = max_natom_dict
-        self.min_chemical_history_dict = min_chemical_history_dict
+        self.max_scscore = max_scscore
+        self.max_elements = max_elements
+        self.min_history = min_history
+        self.termination_logic = termination_logic or {}
 
         self.sort_trees_by = sort_trees_by
         self.template_prioritizer = template_prioritizer
@@ -1154,9 +1172,8 @@ class MCTS:
 
         MyLogger.print_and_log('Active pathway #: {}'.format(num_active_pathways), treebuilder_loc)
 
-        if (self.min_chemical_history_dict is not None
-                and self.min_chemical_history_dict['logic'] not in [None, 'none']
-                and self.chemhistorian is None):
+        if (self.chemhistorian is None and self.min_history is not None
+                and ('min_history' in self.termination_logic['and'] or 'min_history' in self.termination_logic['or'])):
             self.chemhistorian = self.load_chemhistorian(kwargs.get('use_db', False))
 
         self.reset(soft_reset=soft_reset)
@@ -1175,46 +1192,55 @@ class MCTS:
         Determine if the specified chemical is a terminal node in the tree based
         on pre-specified criteria.
 
-        The current setup uses ppg as a mandatory criteria, with atom counts and
-        chemical history data being optional, additional criteria.
+        Criteria to be considered are specified via ``self.termination_logic``,
+        and the thresholds for each criteria are specified separately.
+
+        If no criteria are specified, will always return ``False``.
 
         Args:
             smiles (str): smiles string of the chemical
             ppg (float): cost of the chemical
             hist (dict): historian data for the chemical
         """
-        # Default to False
-        is_terminal = False
+        def buyable():
+            return bool(ppg)
 
-        if self.max_ppg is not None:
-            is_buyable = ppg and (ppg <= self.max_ppg)
-            is_terminal = is_buyable
+        def max_ppg():
+            if self.max_ppg is not None and ppg is not None:
+                # ppg of 0 means not buyable
+                return 0 < ppg <= self.max_ppg
+            return True
 
-        if self.max_natom_dict is not None:
-            # Get structural properties
-            mol = Chem.MolFromSmiles(smiles)
-            if mol:
-                natom_dict = defaultdict(lambda: 0)
-                for a in mol.GetAtoms():
-                    natom_dict[a.GetSymbol()] += 1
-                natom_dict['H'] = sum(a.GetTotalNumHs() for a in mol.GetAtoms())
-                is_small_enough = all(natom_dict[k] <= v for k, v in self.max_natom_dict.items() if k != 'logic')
+        def max_scscore():
+            if self.max_scscore is not None:
+                scscore = self.scscorer.get_score_from_smiles(smiles, noprice=True)
+                return scscore <= self.max_scscore
+            return True
 
-                if self.max_natom_dict['logic'] == 'or':
-                    is_terminal = is_terminal or is_small_enough
-                elif self.max_natom_dict['logic'] == 'and':
-                    is_terminal = is_terminal and is_small_enough
+        def max_elements():
+            if self.max_elements is not None:
+                # Get structural properties
+                mol = Chem.MolFromSmiles(smiles)
+                if mol:
+                    elem_dict = defaultdict(lambda: 0)
+                    for a in mol.GetAtoms():
+                        elem_dict[a.GetSymbol()] += 1
+                    elem_dict['H'] = sum(a.GetTotalNumHs() for a in mol.GetAtoms())
 
-        if self.min_chemical_history_dict is not None:
-            is_popular_enough = hist['as_reactant'] >= self.min_chemical_history_dict['as_reactant'] or \
-                                hist['as_product'] >= self.min_chemical_history_dict['as_product']
+                    return all(elem_dict[k] <= v for k, v in self.max_elements.items())
+            return True
 
-            if self.min_chemical_history_dict['logic'] == 'or':
-                is_terminal = is_terminal or is_popular_enough
-            elif self.min_chemical_history_dict['logic'] == 'and':
-                is_terminal = is_terminal and is_popular_enough
+        def min_history():
+            if self.min_history is not None and hist is not None:
+                return (hist['as_reactant'] >= self.min_history['as_reactant'] or
+                        hist['as_product'] >= self.min_history['as_product'])
+            return True
 
-        return is_terminal
+        local_dict = locals()
+
+        return (any(local_dict[criteria]() for criteria in self.termination_logic['or']) or
+                self.termination_logic['and'] and
+                all(local_dict[criteria]() for criteria in self.termination_logic['and']))
 
     def return_chemical_results(self):
         results = defaultdict(list)
@@ -1260,7 +1286,7 @@ if __name__ == '__main__':
                                            expansion_time=30,
                                            max_cum_template_prob=0.995,
                                            template_count=100,
-                                           # min_chemical_history_dict={'as_reactant':5, 'as_product':5,'logic':'none'},
+                                           # min_history={'as_reactant':5, 'as_product':5,'logic':'none'},
                                            soft_reset=False,
                                            soft_stop=False)
     print(status)

@@ -98,12 +98,13 @@ class MCTS:
     def set_options(self, **kwargs):
         """
         Parse keyword arguments and save options to corresponding attributes.
+        Backwards compatible with argument names from original tree builder.
 
         If no keyword arguments are provided, resets to default options.
         """
         # Retro transformer options
-        self.template_max_count = kwargs.get('template_max_count', 100)
-        self.template_max_cum_prob = kwargs.get('template_max_cum_prob', 0.995)
+        self.template_max_count = kwargs.get('template_max_count', kwargs.get('template_count', 100))
+        self.template_max_cum_prob = kwargs.get('template_max_cum_prob', kwargs.get('max_cum_template_prob', 0.995))
         self.fast_filter_threshold = kwargs.get('fast_filter_threshold', 0.75)
 
         # Tree generation options
@@ -116,8 +117,8 @@ class MCTS:
         self.exploration_weight = kwargs.get('exploration_weight', 1.0)
         self.return_first = kwargs.get('return_first', False)
         self.max_trees = kwargs.get('max_trees', None)
-        self.banned_chemicals = kwargs.get('banned_chemicals', [])
-        self.banned_reactions = kwargs.get('banned_reactions', [])
+        self.banned_chemicals = kwargs.get('banned_chemicals', kwargs.get('forbidden_molecules', []))
+        self.banned_reactions = kwargs.get('banned_reactions', kwargs.get('known_bad_reactions', []))
 
         # Terminal node criteria
         self.max_ppg = kwargs.get('max_ppg', None)

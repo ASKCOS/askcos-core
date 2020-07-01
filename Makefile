@@ -46,4 +46,4 @@ debug:
 	docker run -it --rm -w /usr/local/askcos-core $(VOLUMES) $(REGISTRY):$(TAG) /bin/bash
 
 test:
-	docker run --rm -w /usr/local/askcos-core $(VOLUMES) $(REGISTRY):$(TAG) /bin/bash -c "python -m unittest discover -v -p '*test.py' -s makeit"
+	docker run --rm -w /usr/local/askcos-core $(VOLUMES) $(REGISTRY):$(TAG) /bin/bash -c "python -m unittest discover -v -p '*test.py' -s askcos"

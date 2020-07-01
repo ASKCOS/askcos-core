@@ -18,7 +18,7 @@ RUN apt-get update && \
 COPY requirements.txt requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt && rm requirements.txt
 
-COPY --from=data /data /usr/local/askcos-core/makeit/data
+COPY --from=data /data /usr/local/askcos-core/askcos/data
 
 COPY --chown=askcos:askcos . /usr/local/askcos-core
 

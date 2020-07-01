@@ -4,7 +4,7 @@ import unittest
 
 import numpy as np
 
-import makeit.prioritization.templates.relevance as rel
+import askcos.prioritization.templates.relevance as rel
 
 
 class TestTemplateRelevance(unittest.TestCase):

@@ -1,11 +1,11 @@
 import gzip
 import json
-import makeit.global_config as gc
+import askcos.global_config as gc
 from rdkit import RDLogger
 lg = RDLogger.logger()
 lg.setLevel(4)
 import rdkit.Chem as Chem
-from makeit.utilities.io.logger import MyLogger
+from askcos.utilities.io.logger import MyLogger
 from pymongo import MongoClient
 import os
 import hashlib

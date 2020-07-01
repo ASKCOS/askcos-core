@@ -1,10 +1,10 @@
-from makeit.prioritization.prioritizer import Prioritizer
-import makeit.global_config as gc
+from askcos.prioritization.prioritizer import Prioritizer
+import askcos.global_config as gc
 import rdkit.Chem as Chem
 from rdkit.Chem import AllChem
 import numpy as np
-from makeit.utilities.buyable.pricer import Pricer
-from makeit.utilities.io.logger import MyLogger
+from askcos.utilities.buyable.pricer import Pricer
+from askcos.utilities.io.logger import MyLogger
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Lambda
 from tensorflow.keras import backend as K
@@ -14,7 +14,7 @@ import random
 import os
 import time
 import os
-import makeit.utilities.io.pickle as pickle
+import askcos.utilities.io.pickle as pickle
 from numpy import inf
 mincost_prioritizer_loc = 'mincostprioritizer'
 

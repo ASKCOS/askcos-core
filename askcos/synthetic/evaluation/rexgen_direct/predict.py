@@ -1,5 +1,5 @@
-from makeit.synthetic.evaluation.rexgen_direct.core_wln_global.directcorefinder import DirectCoreFinder
-from makeit.synthetic.evaluation.rexgen_direct.rank_diff_wln.directcandranker import DirectCandRanker
+from askcos.synthetic.evaluation.rexgen_direct.core_wln_global.directcorefinder import DirectCoreFinder
+from askcos.synthetic.evaluation.rexgen_direct.rank_diff_wln.directcandranker import DirectCandRanker
 import rdkit.Chem as Chem 
 import sys
 import os 

@@ -3,9 +3,9 @@ from tensorflow.keras.utils import Sequence
 import numpy as np
 from random import shuffle
 
-from makeit.synthetic.selectivity.mol_graph import smiles2graph_pr, pack1D, pack2D, pack2D_withidx, \
+from askcos.synthetic.selectivity.mol_graph import smiles2graph_pr, pack1D, pack2D, pack2D_withidx, \
     get_mask, binary_features_batch
-from makeit import global_config as gc
+from askcos import global_config as gc
 
 atom_fdim = gc.GEN_SELECTIVITY['atom_fdim']
 

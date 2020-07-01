@@ -4,8 +4,8 @@ import unittest
 
 from pymongo import MongoClient, collection, errors
 
-import makeit.global_config as gc
-from makeit.utilities.buyable.pricer import Pricer
+import askcos.global_config as gc
+from askcos.utilities.buyable.pricer import Pricer
 
 
 def db_available():

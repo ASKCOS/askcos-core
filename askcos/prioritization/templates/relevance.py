@@ -1,9 +1,9 @@
-import makeit.global_config as gc
-from makeit.prioritization.prioritizer import Prioritizer
+import askcos.global_config as gc
+from askcos.prioritization.prioritizer import Prioritizer
 import rdkit.Chem as Chem
 from rdkit.Chem import AllChem
 import numpy as np
-from makeit.utilities.io.logger import MyLogger
+from askcos.utilities.io.logger import MyLogger
 import tensorflow as tf
 from scipy.special import softmax
 import requests

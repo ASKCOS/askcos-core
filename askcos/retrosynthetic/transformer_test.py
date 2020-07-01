@@ -1,8 +1,8 @@
 import time
 import unittest
 
-import makeit.global_config as gc
-import makeit.retrosynthetic.transformer as retro_trans
+import askcos.global_config as gc
+import askcos.retrosynthetic.transformer as retro_trans
 
 
 @unittest.skip('Work-in-progress')

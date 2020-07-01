@@ -3,7 +3,7 @@ import unittest
 import numpy as np
 import rdkit.Chem as Chem
 
-from makeit.retrosynthetic.mcts.tree_builder import MCTS
+from askcos.retrosynthetic.mcts.tree_builder import MCTS
 
 
 class TestMCTSTreeBuilder(unittest.TestCase):

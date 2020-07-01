@@ -1,16 +1,16 @@
 import os, sys
-from makeit.utilities.fingerprinting import create_rxn_Morgan2FP_separately
+from askcos.utilities.fingerprinting import create_rxn_Morgan2FP_separately
 from rdkit import Chem
 from rdkit.Chem import AllChem, DataStructs
-from makeit.interfaces.scorer import Scorer
+from askcos.interfaces.scorer import Scorer
 import numpy as np
 import csv
 from pymongo import MongoClient
 from tqdm import tqdm
 from tensorflow.keras.models import load_model
 from tensorflow.keras import backend as K
-import makeit.global_config as gc
-from makeit.utilities.io.logger import MyLogger
+import askcos.global_config as gc
+from askcos.utilities.io.logger import MyLogger
 import os
 fast_filter_loc = 'fast_filter'
 

@@ -1,4 +1,4 @@
-from makeit.synthetic.selectivity.multitask_model import tf_predictor
+from askcos.synthetic.selectivity.multitask_model import tf_predictor
 import rdkit.Chem as Chem 
 import sys
 import os 

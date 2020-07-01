@@ -5,8 +5,8 @@ import unittest
 
 import numpy as np
 
-import makeit.synthetic.evaluation.rexgen_direct.core_wln_global.mol_graph as mg
-import makeit.synthetic.evaluation.rexgen_direct.core_wln_global.mol_graph_rich as mgr
+import askcos.synthetic.evaluation.rexgen_direct.core_wln_global.mol_graph as mg
+import askcos.synthetic.evaluation.rexgen_direct.core_wln_global.mol_graph_rich as mgr
 
 
 class TestMolGraph(unittest.TestCase):

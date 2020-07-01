@@ -1,22 +1,22 @@
 from __future__ import print_function
-import makeit.global_config as gc
+import askcos.global_config as gc
 USE_STEREOCHEMISTRY = False
 import rdkit.Chem as Chem
 from rdkit.Chem import AllChem
 import numpy as np
 import os
-import makeit.utilities.io.pickle as pickle
+import askcos.utilities.io.pickle as pickle
 from functools import partial  # used for passing args to multiprocessing
-from makeit.utilities.io.logger import MyLogger
-from makeit.synthetic.enumeration.results import ForwardResult, ForwardProduct
+from askcos.utilities.io.logger import MyLogger
+from askcos.synthetic.enumeration.results import ForwardResult, ForwardProduct
 from pymongo import MongoClient
-from makeit.interfaces.template_transformer import TemplateTransformer
-from makeit.interfaces.forward_enumerator import ForwardEnumerator
-from makeit.prioritization.templates.popularity import PopularityTemplatePrioritizer
-from makeit.prioritization.templates.relevance import RelevanceTemplatePrioritizer
-from makeit.prioritization.default import DefaultPrioritizer
-from makeit.utilities.reactants import clean_reactant_mapping
-from makeit.utilities.outcomes import summarize_reaction_outcome, summarize_reaction_outcome_use_isotopes
+from askcos.interfaces.template_transformer import TemplateTransformer
+from askcos.interfaces.forward_enumerator import ForwardEnumerator
+from askcos.prioritization.templates.popularity import PopularityTemplatePrioritizer
+from askcos.prioritization.templates.relevance import RelevanceTemplatePrioritizer
+from askcos.prioritization.default import DefaultPrioritizer
+from askcos.utilities.reactants import clean_reactant_mapping
+from askcos.utilities.outcomes import summarize_reaction_outcome, summarize_reaction_outcome_use_isotopes
 
 forward_transformer_loc = 'forward_transformer'
 

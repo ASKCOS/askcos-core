@@ -2,10 +2,10 @@ import os
 import pickle
 import unittest
 
-import makeit.global_config as gc
-import makeit.synthetic.evaluation.evaluator as ev
-import makeit.synthetic.evaluation.fast_filter as ff
-import makeit.synthetic.evaluation.template_free as tf
+import askcos.global_config as gc
+import askcos.synthetic.evaluation.evaluator as ev
+import askcos.synthetic.evaluation.fast_filter as ff
+import askcos.synthetic.evaluation.template_free as tf
 
 
 @unittest.skip('Non-deterministic')

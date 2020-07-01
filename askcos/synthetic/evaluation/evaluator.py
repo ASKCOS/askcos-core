@@ -1,11 +1,11 @@
-import makeit.global_config as gc
+import askcos.global_config as gc
 import rdkit.Chem as Chem
 from multiprocessing import Process, Manager, Queue
-from makeit.utilities.io.logger import MyLogger
-from makeit.utilities.io.model_loader import load_fastfilter, load_templatebased, load_templatefree
-from makeit.utilities.parsing import parse_molecule_to_smiles, parse_list_to_smiles
-from makeit.utilities.outcomes import summarize_reaction_outcome
-from makeit.utilities.descriptors import edits_to_tensor
+from askcos.utilities.io.logger import MyLogger
+from askcos.utilities.io.model_loader import load_fastfilter, load_templatebased, load_templatefree
+from askcos.utilities.parsing import parse_molecule_to_smiles, parse_list_to_smiles
+from askcos.utilities.outcomes import summarize_reaction_outcome
+from askcos.utilities.descriptors import edits_to_tensor
 from celery.result import allow_join_result
 from numpy import Inf
 

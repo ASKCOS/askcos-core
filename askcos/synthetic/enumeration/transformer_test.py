@@ -1,6 +1,6 @@
-import makeit.synthetic.enumeration.transformer as transformer
-from makeit.synthetic.enumeration.results import ForwardResult
-import makeit.global_config as gc
+import askcos.synthetic.enumeration.transformer as transformer
+from askcos.synthetic.enumeration.results import ForwardResult
+import askcos.global_config as gc
 import unittest
 import os
 import sys

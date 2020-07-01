@@ -6,8 +6,8 @@ from collections import defaultdict
 import rdkit.Chem as Chem
 from pymongo import MongoClient, errors
 
-import makeit.global_config as gc
-from makeit.utilities.io.logger import MyLogger
+import askcos.global_config as gc
+from askcos.utilities.io.logger import MyLogger
 
 pricer_loc = 'pricer'
 

@@ -1,15 +1,15 @@
 import os
-import makeit.global_config as gc
+import askcos.global_config as gc
 from pymongo import MongoClient
-from makeit.utilities.io.logger import MyLogger
-from makeit.utilities.buyable.pricer import Pricer
-from makeit.synthetic.context.nearestneighbor import NNContextRecommender
-from makeit.synthetic.context.neuralnetwork import NeuralNetContextRecommender
-from makeit.synthetic.enumeration.transformer import ForwardTransformer
-from makeit.retrosynthetic.transformer import RetroTransformer
-from makeit.synthetic.evaluation.template_based import TemplateNeuralNetScorer
-from makeit.synthetic.evaluation.template_free import TemplateFreeNeuralNetScorer
-from makeit.synthetic.evaluation.fast_filter import FastFilterScorer
+from askcos.utilities.io.logger import MyLogger
+from askcos.utilities.buyable.pricer import Pricer
+from askcos.synthetic.context.nearestneighbor import NNContextRecommender
+from askcos.synthetic.context.neuralnetwork import NeuralNetContextRecommender
+from askcos.synthetic.enumeration.transformer import ForwardTransformer
+from askcos.retrosynthetic.transformer import RetroTransformer
+from askcos.synthetic.evaluation.template_based import TemplateNeuralNetScorer
+from askcos.synthetic.evaluation.template_free import TemplateFreeNeuralNetScorer
+from askcos.synthetic.evaluation.fast_filter import FastFilterScorer
 import sys
 model_loader_loc = 'model_loader'
 

@@ -2,7 +2,7 @@ import unittest
 
 import tensorflow.compat.v1 as tf
 
-from makeit.synthetic.selectivity.site_selectivity import Site_Predictor
+from askcos.synthetic.selectivity.site_selectivity import Site_Predictor
 
 
 class SiteSelectivity(unittest.TestCase):

@@ -10,15 +10,15 @@ import numpy as np
 import rdkit.Chem as Chem
 from pymongo import MongoClient
 
-import makeit.global_config as gc
-from makeit.retrosynthetic.mcts.nodes import Chemical, Reaction, ChemicalTemplateApplication
-from makeit.retrosynthetic.transformer import RetroTransformer
-from makeit.utilities.buyable.pricer import Pricer
-from makeit.utilities.formats import chem_dict, rxn_dict
-from makeit.utilities.io.logger import MyLogger
-from makeit.utilities.historian.chemicals import ChemHistorian
-from makeit.prioritization.templates.relevance import RelevanceTemplatePrioritizer
-from makeit.synthetic.evaluation.fast_filter import FastFilterScorer
+import askcos.global_config as gc
+from askcos.retrosynthetic.mcts.nodes import Chemical, Reaction, ChemicalTemplateApplication
+from askcos.retrosynthetic.transformer import RetroTransformer
+from askcos.utilities.buyable.pricer import Pricer
+from askcos.utilities.formats import chem_dict, rxn_dict
+from askcos.utilities.io.logger import MyLogger
+from askcos.utilities.historian.chemicals import ChemHistorian
+from askcos.prioritization.templates.relevance import RelevanceTemplatePrioritizer
+from askcos.synthetic.evaluation.fast_filter import FastFilterScorer
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
@@ -127,7 +127,7 @@ class MCTS:
         # Initialize vars, reset dicts, etc.
         self.reset(soft_reset=False)
 
-        from makeit.utilities.with_dummy import with_dummy
+        from askcos.utilities.with_dummy import with_dummy
         self.allow_join_result = with_dummy
 
     @staticmethod

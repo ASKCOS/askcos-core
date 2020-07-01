@@ -1,20 +1,20 @@
-import makeit.global_config as gc
+import askcos.global_config as gc
 from multiprocessing import Process, Manager, Queue
-from makeit.synthetic.evaluation.evaluator import Evaluator
+from askcos.synthetic.evaluation.evaluator import Evaluator
 import sys 
 if sys.version_info[0] < 3:
     import Queue as VanillaQueue
 else:
     import queue as VanillaQueue
 import time
-from makeit.utilities.io.logger import MyLogger
-from makeit.utilities.io import model_loader
+from askcos.utilities.io.logger import MyLogger
+from askcos.utilities.io import model_loader
 from askcos_site.askcos_celery.contextrecommender.cr_coordinator import get_context_recommendations
 from askcos_site.askcos_celery.treeevaluator.scoring_coordinator import evaluate
-from makeit.prioritization.contexts.probability import ProbabilityContextPrioritizer
-from makeit.prioritization.contexts.rank import RankContextPrioritizer
-from makeit.prioritization.default import DefaultPrioritizer
-import makeit.utilities.contexts as context_cleaner
+from askcos.prioritization.contexts.probability import ProbabilityContextPrioritizer
+from askcos.prioritization.contexts.rank import RankContextPrioritizer
+from askcos.prioritization.default import DefaultPrioritizer
+import askcos.utilities.contexts as context_cleaner
 treeEvaluator_loc = 'tree_evaluator'
 
 
@@ -203,7 +203,7 @@ class TreeEvaluator():
             if self.celery:
                 from celery.result import allow_join_result
             else:
-                from makeit.utilities.with_dummy import with_dummy as allow_join_result
+                from askcos.utilities.with_dummy import with_dummy as allow_join_result
             with allow_join_result():
                 target = tree['smiles']
                 reaction = tree['children'][0]

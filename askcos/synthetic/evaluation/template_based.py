@@ -1,4 +1,4 @@
-import makeit.global_config as gc
+import askcos.global_config as gc
 import rdkit.Chem as Chem
 import json
 import time
@@ -12,17 +12,17 @@ if sys.version_info[0] < 3:
     import Queue as VanillaQueue
 else:
     import queue as VanillaQueue
-from makeit.interfaces.scorer import Scorer
-from makeit.synthetic.enumeration.transformer import ForwardTransformer
-from makeit.synthetic.enumeration.results import ForwardResult, ForwardProduct
-from makeit.synthetic.evaluation.template_based_aux import build
-import makeit.utilities.contexts as context_cleaner
-from makeit.utilities.outcomes import summarize_reaction_outcome
-from makeit.utilities.descriptors import edits_to_vectors, edits_to_tensor, edit_vector_lengths
-from makeit.utilities.parsing import parse_list_to_smiles
-from makeit.utilities.io.logger import MyLogger
-import makeit.utilities.io.pickle as pickle
-from makeit.utilities.reactants import clean_reactant_mapping
+from askcos.interfaces.scorer import Scorer
+from askcos.synthetic.enumeration.transformer import ForwardTransformer
+from askcos.synthetic.enumeration.results import ForwardResult, ForwardProduct
+from askcos.synthetic.evaluation.template_based_aux import build
+import askcos.utilities.contexts as context_cleaner
+from askcos.utilities.outcomes import summarize_reaction_outcome
+from askcos.utilities.descriptors import edits_to_vectors, edits_to_tensor, edit_vector_lengths
+from askcos.utilities.parsing import parse_list_to_smiles
+from askcos.utilities.io.logger import MyLogger
+import askcos.utilities.io.pickle as pickle
+from askcos.utilities.reactants import clean_reactant_mapping
 from askcos_site.askcos_celery.treeevaluator.forward_trans_worker import get_outcomes, template_count
 from operator import itemgetter
 template_nn_scorer_loc = 'template_based'
@@ -298,7 +298,7 @@ class TemplateNeuralNetScorer(Scorer):
         if self.celery:
             from celery.result import allow_join_result
         else:
-            from makeit.utilities.with_dummy import with_dummy as allow_join_result
+            from askcos.utilities.with_dummy import with_dummy as allow_join_result
         with allow_join_result():
             self.template_prioritization = kwargs.pop('template_prioritization', gc.popularity)
             self.prepare()

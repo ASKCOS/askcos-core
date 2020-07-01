@@ -4,11 +4,11 @@ import tensorflow.compat.v1 as tf
 tf.disable_v2_behavior()
 from scipy.special import softmax
 
-from makeit import global_config as gc
-from makeit.synthetic.selectivity.general_model.data_loading import GraphDataLoader
-from makeit.synthetic.selectivity.general_model.loss import wln_loss
-from makeit.synthetic.selectivity.general_model.models import WLNReactionClassifier
-from makeit.synthetic.selectivity.mol_graph import atom_fdim as adim, bond_fdim as bdim, max_nb, \
+from askcos import global_config as gc
+from askcos.synthetic.selectivity.general_model.data_loading import GraphDataLoader
+from askcos.synthetic.selectivity.general_model.loss import wln_loss
+from askcos.synthetic.selectivity.general_model.models import WLNReactionClassifier
+from askcos.synthetic.selectivity.mol_graph import atom_fdim as adim, bond_fdim as bdim, max_nb, \
     smiles2graph_pr as _s2g
 
 model_path = gc.GEN_SELECTIVITY['model_path']

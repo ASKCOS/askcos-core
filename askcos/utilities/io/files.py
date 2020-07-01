@@ -1,5 +1,5 @@
 import os
-import makeit.global_config as gc 
+import askcos.global_config as gc
 
 def make_directory(dir_name):
     path = os.path.join(os.getcwd(), dir_name)

@@ -8,8 +8,8 @@ from pymongo import MongoClient
 from rdchiral.initialization import rdchiralReaction
 from rdkit.Chem import AllChem
 
-import makeit.global_config as gc
-from makeit.utilities.io.logger import MyLogger
+import askcos.global_config as gc
+from askcos.utilities.io.logger import MyLogger
 
 transformer_loc = 'template_transformer'
 

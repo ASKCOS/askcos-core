@@ -1,8 +1,8 @@
 import unittest
 from pymongo import MongoClient, errors
 
-import makeit.global_config as gc
-from makeit.utilities.historian.chemicals import ChemHistorian
+import askcos.global_config as gc
+from askcos.utilities.historian.chemicals import ChemHistorian
 
 def db_available():
     """Check if a mongo db instance is available."""

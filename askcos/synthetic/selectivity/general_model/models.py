@@ -1,7 +1,7 @@
 import tensorflow as tf
 from tensorflow.keras import layers
 import tensorflow.keras.backend as K
-from makeit.synthetic.selectivity.general_model.layers import WLN_Layer, Global_Attention
+from askcos.synthetic.selectivity.general_model.layers import WLN_Layer, Global_Attention
 
 
 class WLNReactionClassifier(tf.keras.Model):

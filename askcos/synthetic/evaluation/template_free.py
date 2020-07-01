@@ -1,4 +1,4 @@
-import makeit.global_config as gc
+import askcos.global_config as gc
 import rdkit.Chem as Chem
 from rdkit.Chem import Descriptors
 import json
@@ -7,9 +7,9 @@ from pymongo import MongoClient
 import numpy as np
 import os
 import sys
-from makeit.interfaces.scorer import Scorer
-import makeit.utilities.contexts as context_cleaner
-from makeit.utilities.io.logger import MyLogger
+from askcos.interfaces.scorer import Scorer
+import askcos.utilities.contexts as context_cleaner
+from askcos.utilities.io.logger import MyLogger
 from operator import itemgetter
 template_free_scorer_loc = 'template_free_scorer'
 
@@ -18,7 +18,7 @@ class TemplateFreeNeuralNetScorer(Scorer):
     """Template-free neural net evaluator.
 
     Attributes:
-        model (makeit.synthetic.evaluation.rexgen_direct.predict.TFFP):
+        model (askcos.synthetic.evaluation.rexgen_direct.predict.TFFP):
             Template-free forward predictor.
     """
     def __init__(self, **kwargs):
@@ -27,7 +27,7 @@ class TemplateFreeNeuralNetScorer(Scorer):
         Args:
             **kwargs: Unused.
         """
-        from makeit.synthetic.evaluation.rexgen_direct.predict import TFFP
+        from askcos.synthetic.evaluation.rexgen_direct.predict import TFFP
         self.model = TFFP()
 
     def evaluate(self, reactants_smiles, contexts=[(20,'','','','','')], **kwargs):

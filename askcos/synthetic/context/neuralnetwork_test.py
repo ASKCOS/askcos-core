@@ -4,8 +4,8 @@ import unittest
 
 import numpy as np
 
-import makeit.global_config as gc
-import makeit.synthetic.context.neuralnetwork as nn
+import askcos.global_config as gc
+import askcos.synthetic.context.neuralnetwork as nn
 
 
 class TestNeuralNetwork(unittest.TestCase):

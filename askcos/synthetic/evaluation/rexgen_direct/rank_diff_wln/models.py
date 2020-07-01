@@ -1,7 +1,7 @@
 import tensorflow.compat.v1 as tf
 tf.disable_v2_behavior()
-from makeit.synthetic.evaluation.rexgen_direct.rank_diff_wln.mol_graph_direct_useScores import max_nb
-from makeit.synthetic.evaluation.rexgen_direct.rank_diff_wln.nn import *
+from askcos.synthetic.evaluation.rexgen_direct.rank_diff_wln.mol_graph_direct_useScores import max_nb
+from askcos.synthetic.evaluation.rexgen_direct.rank_diff_wln.nn import *
 
 def rcnn_wl_last(graph_inputs, hidden_size, depth, training=True):
     input_atom, input_bond, atom_graph, bond_graph, num_nbs = graph_inputs

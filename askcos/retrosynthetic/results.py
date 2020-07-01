@@ -1,7 +1,7 @@
 import rdkit.Chem as Chem
 from rdkit.Chem import AllChem
-from makeit.utilities.cluster import group_results
-import makeit.global_config as gc
+from askcos.utilities.cluster import group_results
+import askcos.global_config as gc
 
 
 class RetroResult:

@@ -1,5 +1,5 @@
-import makeit.prioritization.precursors.scscore as sc
-import makeit.prioritization.precursors.mincost as mc
+import askcos.prioritization.precursors.scscore as sc
+import askcos.prioritization.precursors.mincost as mc
 import unittest
 
 class TestSCScore(unittest.TestCase):

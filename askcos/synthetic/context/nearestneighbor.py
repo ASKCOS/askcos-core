@@ -1,17 +1,17 @@
-import makeit.global_config as gc
+import askcos.global_config as gc
 from pymongo import MongoClient
 import rdkit.Chem as Chem
 from rdkit.Chem import AllChem
-import makeit.utilities.io.pickle as pickle
+import askcos.utilities.io.pickle as pickle
 import numpy as np
 import random
 from collections import deque
 # from sklearn.neighbors import NearestNeighbors as NN
 from sklearn.externals import joblib
-import makeit.utilities.strings as strings
-import makeit.utilities.fingerprinting as fp
-from makeit.utilities.io.logger import MyLogger
-from makeit.interfaces.context_recommender import ContextRecommender
+import askcos.utilities.strings as strings
+import askcos.utilities.fingerprinting as fp
+from askcos.utilities.io.logger import MyLogger
+from askcos.interfaces.context_recommender import ContextRecommender
 contextRecommender_loc = 'contextRecommender'
 
 class NNContextRecommender(ContextRecommender):

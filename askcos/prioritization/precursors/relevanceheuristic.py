@@ -1,9 +1,9 @@
-from makeit.prioritization.prioritizer import Prioritizer
+from askcos.prioritization.prioritizer import Prioritizer
 import rdkit.Chem as Chem
 from rdkit.Chem import AllChem
 import numpy as np
-from makeit.utilities.buyable.pricer import Pricer
-from makeit.utilities.io.logger import MyLogger
+from askcos.utilities.buyable.pricer import Pricer
+from askcos.utilities.io.logger import MyLogger
 heuristic_precursor_prioritizer_loc = 'relevanceheuristic_precursor_prioritizer'
 
 

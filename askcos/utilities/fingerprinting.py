@@ -1,9 +1,9 @@
-import makeit.global_config as gc
+import askcos.global_config as gc
 from rdkit import Chem
 from rdkit.Chem import AllChem, DataStructs
 import numpy as np
-from makeit.utilities.io.logger import MyLogger
-from makeit.utilities.parsing import check_smiles
+from askcos.utilities.io.logger import MyLogger
+from askcos.utilities.parsing import check_smiles
 fingerprinting_loc = 'fingerprinting'
 
 

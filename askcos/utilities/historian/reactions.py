@@ -1,12 +1,12 @@
-import makeit.global_config as gc
+import askcos.global_config as gc
 from rdkit import RDLogger
 lg = RDLogger.logger()
 lg.setLevel(4)
 import rdkit.Chem as Chem
 from collections import defaultdict
 from tqdm import tqdm
-from makeit.utilities.io.logger import MyLogger
-import makeit.utilities.io.pickle as pickle
+from askcos.utilities.io.logger import MyLogger
+import askcos.utilities.io.pickle as pickle
 from pymongo import MongoClient
 from multiprocessing import Manager
 import os

@@ -1,12 +1,12 @@
 import tensorflow.compat.v1 as tf
 tf.disable_v2_behavior()
-import makeit.global_config as gc
+import askcos.global_config as gc
 import numpy as np
 from tensorflow.keras.models import model_from_json
 from tensorflow.keras import backend as K
-import makeit.utilities.fingerprinting as fp
-from makeit.utilities.io.logger import MyLogger
-from makeit.interfaces.context_recommender import ContextRecommender
+import askcos.utilities.fingerprinting as fp
+from askcos.utilities.io.logger import MyLogger
+from askcos.interfaces.context_recommender import ContextRecommender
 from scipy import stats
 import pickle
 from rdkit import Chem

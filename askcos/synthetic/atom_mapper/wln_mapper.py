@@ -1,8 +1,8 @@
 from rdkit.Chem import rdmolops, Descriptors
-import makeit.global_config as gc
+import askcos.global_config as gc
 import rdkit.Chem as Chem
 import numpy as np
-from makeit.utilities.io.logger import MyLogger
+from askcos.utilities.io.logger import MyLogger
 template_free_scorer_loc = 'template_free_scorer'
 
 
@@ -10,7 +10,7 @@ class WLN_AtomMapper:
     """Template-free neural net evaluator.
 
         Attributes:
-            model (makeit.synthetic.evaluation.rexgen_direct.predict.TFFP):
+            model (askcos.synthetic.evaluation.rexgen_direct.predict.TFFP):
                 Template-free forward predictor.
         """
 
@@ -20,7 +20,7 @@ class WLN_AtomMapper:
         Args:
             **kwargs: Unused.
         """
-        from makeit.synthetic.evaluation.rexgen_direct.predict import TFFP
+        from askcos.synthetic.evaluation.rexgen_direct.predict import TFFP
         self.model = TFFP()
 
     def get_wln_resutls(self, reactants_smiles, contexts=[(20,'','','','','')], **kwargs):

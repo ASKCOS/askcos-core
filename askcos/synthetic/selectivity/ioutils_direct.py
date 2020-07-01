@@ -1,5 +1,5 @@
 import rdkit.Chem as Chem
-from makeit.synthetic.selectivity.mol_graph import bond_fdim, bond_features
+from askcos.synthetic.selectivity.mol_graph import bond_fdim, bond_features
 import numpy as np
 
 binary_fdim = 5 + bond_fdim

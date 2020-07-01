@@ -2,7 +2,7 @@ import os
 import pickle
 import unittest
 
-import makeit.synthetic.evaluation.rexgen_direct.predict as p
+import askcos.synthetic.evaluation.rexgen_direct.predict as p
 
 
 class TestPredict(unittest.TestCase):

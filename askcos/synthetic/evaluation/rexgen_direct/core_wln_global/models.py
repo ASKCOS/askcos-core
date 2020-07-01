@@ -1,7 +1,7 @@
 import tensorflow.compat.v1 as tf
 tf.disable_v2_behavior()
-from makeit.synthetic.evaluation.rexgen_direct.core_wln_global.mol_graph import max_nb
-from makeit.synthetic.evaluation.rexgen_direct.core_wln_global.nn import *
+from askcos.synthetic.evaluation.rexgen_direct.core_wln_global.mol_graph import max_nb
+from askcos.synthetic.evaluation.rexgen_direct.core_wln_global.nn import *
 
 def gated_convnet(graph_inputs, batch_size=64, hidden_size=300, depth=3, res_block=2):
     input_atom, input_bond, atom_graph, bond_graph, num_nbs, node_mask = graph_inputs

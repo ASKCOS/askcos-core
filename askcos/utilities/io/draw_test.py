@@ -3,11 +3,11 @@ import unittest
 
 from PIL import Image, ImageChops
 
-import makeit.utilities.io.draw as draw
+import askcos.utilities.io.draw as draw
 
 
 class TestDraw(unittest.TestCase):
-    """This class contains unit tests for the :mod:`makeit.utilities.io.draw` module."""
+    """This class contains unit tests for the :mod:`askcos.utilities.io.draw` module."""
 
     def test_01_ReactionStringToImage(self):
         """Test drawing of a reaction string."""

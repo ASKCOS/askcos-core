@@ -1,5 +1,5 @@
 import argparse
-import makeit.global_config as gc
+import askcos.global_config as gc
 arg_parser_loc = 'arg_parser'
 
 

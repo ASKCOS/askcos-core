@@ -1,16 +1,16 @@
 from __future__ import print_function
 import os
 import time
-import makeit.global_config as gc
-from makeit.utilities.io import arg_parser, name_parser, files
+import askcos.global_config as gc
+from askcos.utilities.io import arg_parser, name_parser, files
 import rdkit.Chem as Chem
-from makeit.utilities.io.logger import MyLogger
-from makeit.retrosynthetic.mcts.tree_builder import MCTS as TreeBuilder
+from askcos.utilities.io.logger import MyLogger
+from askcos.retrosynthetic.mcts.tree_builder import MCTS as TreeBuilder
 from askcos_site.askcos_celery.treebuilder.tb_coordinator_mcts import get_buyable_paths
 from askcos_site.askcos_celery.treeevaluator.tree_evaluation_coordinator import evaluate_trees
-from makeit.synthetic.evaluation.tree_evaluator import TreeEvaluator
+from askcos.synthetic.evaluation.tree_evaluator import TreeEvaluator
 import sys
-makeit_loc = 'makeit'
+makeit_loc = 'askcos'
 
 
 class MAKEIT:

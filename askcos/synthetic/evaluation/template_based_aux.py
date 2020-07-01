@@ -18,17 +18,17 @@ try:
     from keras.utils.visualize_util import plot
 except:
     no_printing = True
-from makeit.utilities.descriptors import edits_to_vectors, oneHotVector # for testing
-from makeit.utilities.threadsafe import threadsafe_generator
+from askcos.utilities.descriptors import edits_to_vectors, oneHotVector # for testing
+from askcos.utilities.threadsafe import threadsafe_generator
 import rdkit.Chem as Chem
 
 from scipy.sparse import coo_matrix
-import makeit.utilities.io.pickle as pickle
+import askcos.utilities.io.pickle as pickle
 import matplotlib
 import matplotlib.pyplot as plt    # for visualization
 import scipy.stats as ss
 import itertools
-from makeit.utilities.io.logger import MyLogger
+from askcos.utilities.io.logger import MyLogger
 forwardPredictionNetwork_loc = 'forwardPredictionNetwork'
 '''
 
@@ -649,8 +649,8 @@ if __name__ == '__main__':
                         help = 'Test model only, default False')
     parser.add_argument('--l2', type = float, default = 0.01,
                         help = 'l2 regularization parameter for each Dense layer, default 0.01')
-    parser.add_argument('--data_tag', type = str, default = 'makeit/predict/data_edits_reaxys/reaxys',
-                        help = 'Data file tag, default makeit/predict/data_edits_reaxys/reaxys')
+    parser.add_argument('--data_tag', type = str, default = 'askcos/predict/data_edits_reaxys/reaxys',
+                        help = 'Data file tag, default askcos/predict/data_edits_reaxys/reaxys')
     parser.add_argument('--lr', type = float, default = 0.01, 
                         help = 'Learning rate, default 0.01')
     # parser.add_argument('--dr', type = float, default = 0.5,

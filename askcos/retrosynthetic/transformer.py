@@ -4,14 +4,14 @@ from pymongo.errors import ServerSelectionTimeoutError
 from rdchiral.initialization import rdchiralReaction, rdchiralReactants
 from rdchiral.main import rdchiralRun
 
-import makeit.global_config as gc
-from makeit.interfaces.template_transformer import TemplateTransformer
-from makeit.prioritization.precursors.relevanceheuristic import RelevanceHeuristicPrecursorPrioritizer
-from makeit.prioritization.templates.relevance import RelevanceTemplatePrioritizer
-from makeit.synthetic.evaluation.fast_filter import FastFilterScorer
-from makeit.utilities.cluster import cluster_precursors
-from makeit.utilities.descriptors import rms_molecular_weight, number_of_rings
-from makeit.utilities.io.logger import MyLogger
+import askcos.global_config as gc
+from askcos.interfaces.template_transformer import TemplateTransformer
+from askcos.prioritization.precursors.relevanceheuristic import RelevanceHeuristicPrecursorPrioritizer
+from askcos.prioritization.templates.relevance import RelevanceTemplatePrioritizer
+from askcos.synthetic.evaluation.fast_filter import FastFilterScorer
+from askcos.utilities.cluster import cluster_precursors
+from askcos.utilities.descriptors import rms_molecular_weight, number_of_rings
+from askcos.utilities.io.logger import MyLogger
 
 retro_transformer_loc = 'retro_transformer'
 

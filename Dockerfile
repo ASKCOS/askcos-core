@@ -4,7 +4,7 @@ ARG DATA_VERSION=dev
 
 FROM registry.gitlab.com/mlpds_mit/askcos/askcos/rdkit:$RDKIT_VERSION as rdkit
 
-FROM registry.gitlab.com/mlpds_mit/askcos/makeit-data:$DATA_VERSION as data
+FROM registry.gitlab.com/mlpds_mit/askcos/askcos-data:$DATA_VERSION as data
 
 FROM python:$PY_VERSION
 

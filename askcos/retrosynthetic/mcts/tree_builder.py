@@ -857,32 +857,18 @@ class MCTS:
                     tids (list of int): Template IDs to get info about.
             """
             if self.retroTransformer.load_all or not self.retroTransformer.use_db:
-                return {
-                    'tforms': [str(self.retroTransformer.templates[tid]['_id']) for tid in tids],
-                    'num_examples': int(sum([self.retroTransformer.templates[tid]['count'] for tid in tids])),
-                    'necessary_reagent': self.retroTransformer.templates[tids[0]]['necessary_reagent'],
-                }
+                templates = [self.retroTransformer.templates[tid] for tid in tids]
             else:
-                db_client = MongoClient(gc.MONGO['path'], gc.MONGO[
-                    'id'], connect=gc.MONGO['connect'])
+                templates = list(self.retroTransformer.TEMPLATE_DB.find({
+                    'index': {'$in': tids},
+                    'template_set': self.template_set,
+                }))
 
-                db_name = gc.RETRO_TEMPLATES['database']
-                collection = gc.RETRO_TEMPLATES['collection']
-                TEMPLATE_DB = db_client[db_name][collection]
-                tforms = []
-                num_examples = 0
-                necessary_reagent = None
-                for tid in tids:
-                    template = TEMPLATE_DB.find_one({'index': tid})
-                    tforms.append(str(template.get('_id', -1)))
-                    num_examples += template.get('count', 1)
-                    if necessary_reagent is None:
-                        necessary_reagent = template.get('necessary_reagent', '')
-                return {
-                    'tforms': tforms,
-                    'num_examples': int(num_examples),
-                    'necessary_reagent': necessary_reagent,
-                }
+            return {
+                'tforms': [str(t.get('_id', -1)) for t in templates],
+                'num_examples': int(sum([t.get('count', 1) for t in templates])),
+                'necessary_reagent': templates[0].get('necessary_reagent', ''),
+            }
 
         seen_rxnsmiles = {}
         self.current_index = 1

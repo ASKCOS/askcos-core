@@ -11,7 +11,7 @@ GIT_HASH := $(shell git log -1 --format='format:%H')
 GIT_DATE := $(shell git log -1 --format='format:%cs')
 GIT_DESCRIBE := $(shell git describe --tags --always --dirty)
 
-REGISTRY ?= registry.gitlab.com/mlpds_mit/askcos/askcos
+REGISTRY ?= registry.gitlab.com/mlpds_mit/askcos/askcos-core
 TAG ?= $(VERSION)
 DATA_VERSION ?= $(VERSION)
 
@@ -43,11 +43,7 @@ push: build_ci
 	@docker push $(REGISTRY):$(TAG)
 
 debug:
-	docker run -it --rm -w /usr/local/ASKCOS $(VOLUMES) $(REGISTRY):$(TAG) /bin/bash
+	docker run -it --rm -w /usr/local/askcos-core $(VOLUMES) $(REGISTRY):$(TAG) /bin/bash
 
 test:
-	docker run --rm -w /usr/local/ASKCOS $(VOLUMES) $(REGISTRY):$(TAG) /bin/bash -c "python -m unittest discover -v -p '*test.py' -s makeit"
-
-setup_pages:
-	@if [ -d "./pages" ]; then echo "directory 'pages' already exists"; exit 1; fi
-	git clone --single-branch --branch pages $(shell git remote get-url origin) pages
+	docker run --rm -w /usr/local/askcos-core $(VOLUMES) $(REGISTRY):$(TAG) /bin/bash -c "python -m unittest discover -v -p '*test.py' -s askcos"

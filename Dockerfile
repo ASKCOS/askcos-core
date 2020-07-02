@@ -4,7 +4,7 @@ ARG DATA_VERSION=dev
 
 FROM registry.gitlab.com/mlpds_mit/askcos/askcos/rdkit:$RDKIT_VERSION as rdkit
 
-FROM registry.gitlab.com/mlpds_mit/askcos/makeit-data:$DATA_VERSION as data
+FROM registry.gitlab.com/mlpds_mit/askcos/askcos-data:$DATA_VERSION as data
 
 FROM python:$PY_VERSION
 
@@ -18,19 +18,17 @@ RUN apt-get update && \
 COPY requirements.txt requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt && rm requirements.txt
 
-COPY --from=data /data /usr/local/ASKCOS/makeit/data
+COPY --from=data /data /usr/local/askcos-core/askcos/data
 
-COPY --chown=askcos:askcos . /usr/local/ASKCOS
+COPY --chown=askcos:askcos . /usr/local/askcos-core
 
 WORKDIR /home/askcos
 USER askcos
 
-ENV LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:"/usr/local/rdkit-2019-03/lib"
-ENV PYTHONPATH=${PYTHONPATH}:/usr/local/rdkit-2019-03:/usr/local/ASKCOS:/usr/local/ASKCOS/askcos/
+ENV LD_LIBRARY_PATH=/usr/local/rdkit-2019-03/lib:${LD_LIBRARY_PATH}
+ENV PYTHONPATH=/usr/local/askcos-core:/usr/local/rdkit-2019-03:${PYTHONPATH}
 
-RUN python /usr/local/ASKCOS/askcos/manage.py collectstatic --noinput
-
-LABEL version={VERSION} \
-      git.hash={GIT_HASH} \
-      git.date={GIT_DATE} \
-      git.describe={GIT_DESCRIBE}
+LABEL core.version={VERSION} \
+      core.git.hash={GIT_HASH} \
+      core.git.date={GIT_DATE} \
+      core.git.describe={GIT_DESCRIBE}

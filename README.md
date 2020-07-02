@@ -228,25 +228,25 @@ Many of the individual modules -- at least the ones that are the most interestin
 
 Using the learned synthetic complexity metric (SCScore):
 ```
-makeit/prioritization/precursors/scscore.py
+askcos/prioritization/precursors/scscore.py
 ```
 
 Obtaining a single-step retrosynthetic suggestion with consideration of chirality:
 ```
-makeit/retrosynthetic/transformer.py
+askcos/retrosynthetic/transformer.py
 ```
 
 Finding recommended reaction conditions based on a trained neural network model:
 ```
-makeit/synthetic/context/neuralnetwork.py
+askcos/synthetic/context/neuralnetwork.py
 ```
 
 Using the template-free forward predictor:
 ```
-makeit/synthetic/evaluation/template_free.py
+askcos/synthetic/evaluation/template_free.py
 ```
 
 Using the coarse "fast filter" (binary classifier) for evaluating reaction plausibility:
 ```
-makeit/synthetic/evaluation/fast_filter.py
+askcos/synthetic/evaluation/fast_filter.py
 ```

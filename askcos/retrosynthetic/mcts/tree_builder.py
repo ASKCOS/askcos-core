@@ -115,6 +115,7 @@ class MCTS:
         self.max_elements = None
         self.min_history = None
         self.termination_logic = None
+        self.buyables_source = None
 
         # Load data and models
         self.pricer = pricer or self.load_pricer(kwargs.get('use_db', False))
@@ -438,7 +439,7 @@ class MCTS:
                             self.Chemicals[smi] = Chemical(smi)
                             self.Chemicals[smi].set_template_relevance_probs(top_probs, top_indices, value)
 
-                            ppg = self.pricer.lookup_smiles(smi, alreadyCanonical=True)
+                            ppg = self.pricer.lookup_smiles(smi, source=self.buyables_source, alreadyCanonical=True)
                             self.Chemicals[smi].purchase_price = ppg
 
                             hist = self.chemhistorian.lookup_smiles(smi, alreadyCanonical=True, template_set=self.template_set)
@@ -794,7 +795,7 @@ class MCTS:
             hist = self.chemhistorian.lookup_smiles(self.smiles, alreadyCanonical=False)
             self.Chemicals[self.smiles].as_reactant = hist['as_reactant']
             self.Chemicals[self.smiles].as_product = hist['as_product']
-            ppg = self.pricer.lookup_smiles(self.smiles, alreadyCanonical=False)
+            ppg = self.pricer.lookup_smiles(self.smiles, source=self.buyables_source, alreadyCanonical=False)
             self.Chemicals[self.smiles].purchase_price = ppg
 
             # First selection is all the same
@@ -1086,6 +1087,7 @@ class MCTS:
                           sort_trees_by='plausibility',
                           template_prioritizer='reaxys',
                           template_set='reaxys',
+                          buyables_source=None,
                           **kwargs):
         """Returns trees with path ending in buyable chemicals.
 
@@ -1136,6 +1138,8 @@ class MCTS:
                 (default: {'plausibility'})
             template_prioritizer (str, optional): Specifies which template
                 prioritizer to use. (default: {'reaxys'})
+            buyables_source (str or list, optional): Specifies source of buyables
+                data to use. Will use all available data if not provided.
             **kwargs: Additional optional arguments.
 
         Returns:
@@ -1162,6 +1166,7 @@ class MCTS:
         self.max_elements = max_elements
         self.min_history = min_history
         self.termination_logic = termination_logic or {}
+        self.buyables_source = buyables_source
 
         self.sort_trees_by = sort_trees_by
         self.template_prioritizer = template_prioritizer

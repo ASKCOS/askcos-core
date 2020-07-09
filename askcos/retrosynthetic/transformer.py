@@ -407,7 +407,7 @@ class RetroTransformer(TemplateTransformer):
 
             outcomes = rdchiralRun(forward_rxn, precursor_reacts, return_mapped=True)
         except Exception as e:
-            MyLogger.print_and_log('cannot create forward template from {}'.format(template))
+            MyLogger.print_and_log('cannot create forward template from {}'.format(template), retro_transformer_loc)
             return {}, None
 
         if outcomes:

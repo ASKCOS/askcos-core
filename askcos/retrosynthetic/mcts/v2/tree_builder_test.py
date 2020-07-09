@@ -4,7 +4,7 @@ import networkx as nx
 import numpy as np
 import rdkit.Chem as Chem
 
-from makeit.retrosynthetic.mcts.v2.tree_builder import MCTS
+from askcos.retrosynthetic.mcts.v2.tree_builder import MCTS
 
 
 class DummyHistorian:

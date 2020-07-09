@@ -144,7 +144,7 @@ class MCTS:
         """
         Loads chemhistorian.
         """
-        from makeit.utilities.historian.chemicals import ChemHistorian
+        from askcos.utilities.historian.chemicals import ChemHistorian
         chemhistorian = ChemHistorian(use_db=use_db)
         chemhistorian.load()
         return chemhistorian
@@ -154,7 +154,7 @@ class MCTS:
         """
         Loads pricer.
         """
-        from makeit.utilities.buyable.pricer import Pricer
+        from askcos.utilities.buyable.pricer import Pricer
         pricer = Pricer(use_db=use_db)
         pricer.load()
         return pricer
@@ -164,7 +164,7 @@ class MCTS:
         """
         Loads pricer.
         """
-        from makeit.prioritization.precursors.scscore import SCScorePrecursorPrioritizer
+        from askcos.prioritization.precursors.scscore import SCScorePrecursorPrioritizer
         scscorer = SCScorePrecursorPrioritizer(pricer=pricer)
         scscorer.load_model(model_tag='1024bool')
         return scscorer
@@ -175,7 +175,7 @@ class MCTS:
         """
         Loads retro transformer model.
         """
-        from makeit.retrosynthetic.transformer import RetroTransformer
+        from askcos.retrosynthetic.transformer import RetroTransformer
         retro_transformer = RetroTransformer(
             use_db=use_db,
             template_set=template_set,

@@ -79,7 +79,7 @@ class Pricer:
         else:
             MyLogger.print_and_log('Buyables file does not exist: {}'.format(file_name), pricer_loc)
 
-    def lookup_smiles(self, smiles, alreadyCanonical=False, isomericSmiles=True):
+    def lookup_smiles(self, smiles, source='all', alreadyCanonical=False, isomericSmiles=True):
         """
         Looks up a price by SMILES. Canonicalize smiles string unless 
         the user specifies that the smiles string is definitely already 
@@ -94,10 +94,15 @@ class Pricer:
             smiles = Chem.MolToSmiles(mol, isomericSmiles=isomericSmiles)
 
         if self.use_db:
-            cursor = self.BUYABLES_DB.find({
-                'smiles': smiles,
-                'source': {'$ne': 'LN'}
-            })
+            query = {'smiles': smiles}
+
+            if source != 'all':
+                if isinstance(source, list):
+                    query['source'] = {'$in': source}
+                else:
+                    query['source'] = source
+
+            cursor = self.BUYABLES_DB.find(query)
             return min([doc['ppg'] for doc in cursor], default=0.0)
         else:
             return self.prices[smiles]

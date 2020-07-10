@@ -79,6 +79,7 @@ class MCTS:
         self.max_elements = None
         self.min_history = None
         self.termination_logic = None
+        self.buyables_source = None
 
         # Parse any keyword arguments and set default options
         self.set_options(**kwargs)
@@ -126,6 +127,7 @@ class MCTS:
         self.max_elements = kwargs.get('max_elements', None)
         self.min_history = kwargs.get('min_history', None)
         self.termination_logic = kwargs.get('termination_logic', {})
+        self.buyables_source = kwargs.get('buyables_source', 'all')
 
     def to_branching(self):
         """
@@ -551,7 +553,7 @@ class MCTS:
         )
         templates = OrderedDict(zip(indices.tolist(), probs.tolist()))
 
-        purchase_price = self.pricer.lookup_smiles(smiles, alreadyCanonical=True)
+        purchase_price = self.pricer.lookup_smiles(smiles, source=self.buyables_source, alreadyCanonical=True)
 
         hist = self.chemhistorian.lookup_smiles(smiles, alreadyCanonical=True, template_set=self.template_set)
 

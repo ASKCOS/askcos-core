@@ -22,7 +22,7 @@ class TFFP():
         atom_mappings = [a.GetAtomMapNum() for a in m.GetAtoms()]
         if len(set(atom_mappings)) != len(atom_mappings):
             [a.SetIntProp('molAtomMapNumber', i+1) for (i, a) in enumerate(m.GetAtoms())]
-        rsmi_am = Chem.MolToSmiles(m)
+        rsmi_am = Chem.MolToSmiles(m, isomericSmiles=False)
         (react, bond_preds, bond_scores, cur_att_score) = self.finder.predict(rsmi_am)
         outcomes = self.ranker.predict(react, bond_preds, bond_scores,
                                        scores=True, top_n=top_n, atommap=atommap)

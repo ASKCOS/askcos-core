@@ -143,6 +143,13 @@ class MCTS:
             data.update(self.tree.nodes[smiles])
         return branching
 
+    def get_union_of_paths(self):
+        """
+        Returns the union of self.paths as a single tree.
+        """
+        if self.paths:
+            return nx.compose_all(self.paths)
+
     @staticmethod
     def load_chemhistorian(use_db):
         """
@@ -195,7 +202,13 @@ class MCTS:
         Build retrosynthesis tree and return paths to buyable precursors.
         """
         self.build_tree(target, **kwargs)
-        return self.enumerate_paths(**kwargs)
+        paths = self.enumerate_paths(**kwargs)
+        status = len(self.chemicals), len(self.reactions)
+        graph = nx.node_link_data(self.get_union_of_paths())
+        for entry in graph['nodes']:
+            if entry['type'] == 'chemical':
+                entry['templates'] = []
+        return paths, status, graph
 
     def build_tree(self, target, **kwargs):
         """

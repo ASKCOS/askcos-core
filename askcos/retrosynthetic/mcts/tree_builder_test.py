@@ -6,13 +6,18 @@ import rdkit.Chem as Chem
 from askcos.retrosynthetic.mcts.tree_builder import MCTS
 
 
+class DummyHistorian:
+    def lookup_smiles(self, *args, **kwargs):
+        return {'as_reactant': 0, 'as_product': 0}
+
+
 class TestMCTSTreeBuilder(unittest.TestCase):
     """Contains functional tests for the MCTS class."""
 
     @classmethod
     def setUpClass(cls):
         cls.nproc = 2
-        cls.mcts = MCTS(nproc=cls.nproc)
+        cls.mcts = MCTS(nproc=cls.nproc, chemhistorian=DummyHistorian())
 
     def assertDictAlmostEqual(self, first, second, rtol=1e-7, atol=0, msg=None, ignore_keys=None):
         """
@@ -124,7 +129,8 @@ class TestMCTSTreeBuilder(unittest.TestCase):
         }
 
         # The 'id' field is non-deterministic, so ignore it
-        self.assertDictAlmostEqual(output_path_1, expected_path_1, rtol=1e-3, ignore_keys=['id'],
+        self.assertDictAlmostEqual(output_path_1, expected_path_1, rtol=1e-3,
+                                   ignore_keys=['id', 'as_reactant', 'as_product'],
                                    msg='Obtained different output: {}'.format(output_path_1))
 
     def test_scopolamine(self):
@@ -186,7 +192,8 @@ class TestMCTSTreeBuilder(unittest.TestCase):
         }
 
         # The 'id' field is non-deterministic, so ignore it
-        self.assertDictAlmostEqual(output_path_1, expected_path_1, rtol=1e-3, ignore_keys=['id'],
+        self.assertDictAlmostEqual(output_path_1, expected_path_1, rtol=1e-3,
+                                   ignore_keys=['id', 'as_reactant', 'as_product'],
                                    msg='Obtained different output: {}'.format(output_path_1))
 
     def test_random(self):
@@ -273,7 +280,8 @@ class TestMCTSTreeBuilder(unittest.TestCase):
         }
 
         # The 'id' field is non-deterministic, so ignore it
-        self.assertDictAlmostEqual(output_path_1, expected_path_1, rtol=1e-3, ignore_keys=['id'],
+        self.assertDictAlmostEqual(output_path_1, expected_path_1, rtol=1e-3,
+                                   ignore_keys=['id', 'as_reactant', 'as_product'],
                                    msg='Obtained different output: {}'.format(output_path_1))
 
     @classmethod

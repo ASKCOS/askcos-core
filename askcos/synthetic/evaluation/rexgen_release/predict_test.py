@@ -5,6 +5,7 @@ import unittest
 import askcos.synthetic.evaluation.rexgen_release.predict as p
 
 
+@unittest.skip('Models have been removed.')
 class TestPredict(unittest.TestCase):
 
     def test_01_predict(self):

@@ -1,3 +1,4 @@
+import os
 import unittest
 from pymongo import MongoClient, errors
 
@@ -26,7 +27,7 @@ class TestChemHistorian(unittest.TestCase):
     def setUpClass(cls):
         """This method is run once before each test in this class."""
         cls.chemhistorian = ChemHistorian()
-        cls.chemhistorian.load()
+        cls.chemhistorian.load_from_file(os.path.join(os.path.dirname(__file__), 'test_data', 'chemicals.json.gz'))
 
     def test_01_lookup_smiles(self):
         """Test that we can look up a SMILES string in chemhistorian."""

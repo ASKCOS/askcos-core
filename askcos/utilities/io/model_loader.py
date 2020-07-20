@@ -7,7 +7,7 @@ from askcos.synthetic.context.nearestneighbor import NNContextRecommender
 from askcos.synthetic.context.neuralnetwork import NeuralNetContextRecommender
 from askcos.synthetic.enumeration.transformer import ForwardTransformer
 from askcos.retrosynthetic.transformer import RetroTransformer
-from askcos.synthetic.evaluation.template_based import TemplateNeuralNetScorer
+# from askcos.synthetic.evaluation.template_based import TemplateNeuralNetScorer
 from askcos.synthetic.evaluation.template_free import TemplateFreeNeuralNetScorer
 from askcos.synthetic.evaluation.fast_filter import FastFilterScorer
 import sys
@@ -58,12 +58,13 @@ def load_fastfilter():
 
 
 def load_templatebased(mincount=25, celery=False, worker_no = 0):
-    transformer = None
-    if not celery:
-        transformer = load_Forward_Transformer(mincount=mincount, worker_no = worker_no)
-    scorer = TemplateNeuralNetScorer(forward_transformer=transformer, celery=celery)
-    scorer.load(gc.PREDICTOR['trained_model_path'], worker_no = worker_no)
-    return scorer
+#     transformer = None
+#     if not celery:
+#         transformer = load_Forward_Transformer(mincount=mincount, worker_no = worker_no)
+#     scorer = TemplateNeuralNetScorer(forward_transformer=transformer, celery=celery)
+#     scorer.load(gc.PREDICTOR['trained_model_path'], worker_no = worker_no)
+#     return scorer
+    return None
 
 
 def load_templatefree():

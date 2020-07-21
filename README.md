@@ -1,4 +1,10 @@
 # askcos-core
+[![askcos-base](https://img.shields.io/badge/-askcos--base-lightgray?style=flat-square)](https://gitlab.com/mlpds_mit/ASKCOS/askcos-base)
+[![askcos-data](https://img.shields.io/badge/-askcos--data-lightgray?style=flat-square)](https://gitlab.com/mlpds_mit/ASKCOS/askcos-data)
+[![askcos-core](https://img.shields.io/badge/-askcos--core-blue?style=flat-square)](https://gitlab.com/mlpds_mit/ASKCOS/askcos-core)
+[![askcos-site](https://img.shields.io/badge/-askcos--site-lightgray?style=flat-square)](https://gitlab.com/mlpds_mit/ASKCOS/askcos-site)
+[![askcos-deploy](https://img.shields.io/badge/-askcos--deploy-lightgray?style=flat-square)](https://gitlab.com/mlpds_mit/ASKCOS/askcos-deploy)
+
 Python package for the prediction of feasible synthetic routes towards a desired compound and associated tasks related to synthesis planning. Originally developed under the DARPA Make-It program and now being developed under the [MLPDS Consortium](http://mlpds.mit.edu).
 
 ## 2020.07 Release Notes

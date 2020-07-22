@@ -7,13 +7,9 @@
 
 Python package for the prediction of feasible synthetic routes towards a desired compound and associated tasks related to synthesis planning. Originally developed under the DARPA Make-It program and now being developed under the [MLPDS Consortium](http://mlpds.mit.edu).
 
-## 2020.07 Release Notes
+## Release Notes
 
-User notes:
-
-Developer notes:
-
-Bug fixes:
+For 2020.07 and newer release notes, see the [askcos-core releases page](https://gitlab.com/mlpds_mit/ASKCOS/askcos-core/-/releases).
 
 For old release notes, see the [ASKCOS releases page](https://gitlab.com/mlpds_mit/ASKCOS/ASKCOS/-/releases).
 

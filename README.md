@@ -29,13 +29,13 @@ $ git clone https://$DEPLOY_TOKEN_USERNAME:$DEPLOY_TOKEN_PASSWORD@gitlab.com/mlp
 
 ### Building a Docker Image
 
-Before building the `askcos-site` image, you log in to the ASKCOS GitLab registry to download the `askcos-base` and `askcos-data` images which are dependencies (or build them yourself). Use the same deploy tokens as above to log in to the registry:
+Before building the `askcos-core` image, you log in to the ASKCOS GitLab registry to download the `askcos-base` and `askcos-data` images which are dependencies (or build them yourself). Use the same deploy tokens as above to log in to the registry:
 
 ```bash
 docker login registry.gitlab.com -u $DEPLOY_TOKEN_USERNAME -p $DEPLOY_TOKEN_PASSWORD
 ```
 
-Then, the askcos-core image can be built using the Dockerfile in this repository.
+Then, the `askcos-core` image can be built using the Dockerfile in this repository.
 
 ```bash
 $ cd askcos-core

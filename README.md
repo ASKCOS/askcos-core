@@ -19,7 +19,7 @@ This package can be used on its own as a normal Python package without deploying
 
 ### Downloading with GitLab Deploy Tokens
 
-This repository can be downloaded using deploy tokens, which provide __read-only__ access to the source code and our container registry in GitLab. The deploy tokens can be found on the [MLPDS Member Resources ASKCOS Versions Page](https://mlpds.mit.edu/member-resources-releases-versions/). The only software prerequisites are git, docker, and docker-compose.
+This repository can be downloaded using deploy tokens, which provide __read-only__ access to the source code and our container registry in GitLab. The deploy tokens can be found on the [MLPDS Member Resources ASKCOS Versions Page](https://mlpds.mit.edu/member-resources-releases-versions/).
 
 ```bash
 $ export DEPLOY_TOKEN_USERNAME=

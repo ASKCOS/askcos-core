@@ -5,5 +5,3 @@ ASKCOS
    :maxdepth: 4
 
    askcos
-   makeit
-   rdchiral

@@ -10,6 +10,7 @@ variables:
 before_script:
   - apk add git make
   - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+  - docker pull $CI_REGISTRY_IMAGE:dev || true  # pull dev image for build cache
 
 build-dev:  # build dev branch for continuous deployment
   stage: build
@@ -31,13 +32,3 @@ build-release:  # build all releases, as determined by tags
     - make push VERSION=$CI_COMMIT_TAG REGISTRY=$CI_REGISTRY_IMAGE TAG=$CI_COMMIT_TAG DATA_VERSION=$CI_COMMIT_TAG
   only:
     - tags
-
-pages:  # update GitLab pages when pages branch is updated
-  stage: deploy
-  script:
-    - cp -r src public
-  artifacts:
-    paths:
-      - public
-  only:
-    - pages

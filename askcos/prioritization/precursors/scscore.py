@@ -185,7 +185,7 @@ class SCScorePrecursorPrioritizer(Prioritizer):
         else:
             return np.max(list_of_scores)
 
-    def get_score_from_smiles(self, smiles, noprice=False):
+    def get_score_from_smiles(self, smiles, noprice=True):
         """Returns score of molecule from given SMILES string.
 
         Args:
@@ -206,6 +206,49 @@ class SCScorePrecursorPrioritizer(Prioritizer):
             # Run
             cur_score = self.apply(fp)
         return cur_score
+
+    def get_max_score_from_joined_smiles(self, smiles, noprice=True):
+        """Returns the max score for a given list of SMILES strings.
+
+        Args:
+            smiles_list (str): list of SMILES strings
+            noprice (bool, optional): Whether to not use the molecules price as
+                its score, if available. (default: {False})
+        """
+        smiles_list = smiles.split('.')
+        return self.get_max_score_from_smiles_list(smiles_list, noprice=noprice)
+
+    def get_max_score_from_smiles_list(self, smiles_list, noprice=True):
+        """Returns the max score for a given list of SMILES strings.
+
+        Args:
+            smiles_list (str): list of SMILES strings
+            noprice (bool, optional): Whether to not use the molecules price as
+                its score, if available. (default: {False})
+        """
+        return np.max([
+            self.get_score_from_smiles(smiles, noprice=noprice)
+            for smiles in smiles_list
+        ])
+
+    def reorder_precursors(self, precursors, noprice=True):
+        """Reorder a list of precursors by their SCScore. Sorts so lower SCScore is higher rank.
+
+        Args:
+            precursors (list of dict)
+
+        Returns:
+            list: reordered list of precursor dictionaries with new 'score' and 'rank' keys
+        """
+        for p in precursors:
+            p['score'] = self.get_max_score_from_smiles_list(p['smiles_split'], noprice=noprice)
+
+        results = sorted(precursors, key=lambda x: x['score'])
+
+        for n, p in enumerate(results):
+            p['rank'] = n + 1
+
+        return results
 
 
 def sigmoid(x):

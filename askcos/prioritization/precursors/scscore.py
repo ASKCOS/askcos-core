@@ -191,7 +191,7 @@ class SCScorePrecursorPrioritizer(Prioritizer):
         Args:
             smiles (str): SMILES string of molecule.
             noprice (bool, optional): Whether to not use the molecules price as
-                its score, if available. (default: {False})
+                its score, if available. (default: {True})
         """
         # Check buyable
         if not noprice:
@@ -208,12 +208,12 @@ class SCScorePrecursorPrioritizer(Prioritizer):
         return cur_score
 
     def get_max_score_from_joined_smiles(self, smiles, noprice=True):
-        """Returns the max score for a given list of SMILES strings.
+        """Returns the max score for a given multi-species SMILES string.
 
         Args:
-            smiles_list (str): list of SMILES strings
+            smiles (str): SMILES string
             noprice (bool, optional): Whether to not use the molecules price as
-                its score, if available. (default: {False})
+                its score, if available. (default: {True})
         """
         smiles_list = smiles.split('.')
         return self.get_max_score_from_smiles_list(smiles_list, noprice=noprice)
@@ -224,7 +224,7 @@ class SCScorePrecursorPrioritizer(Prioritizer):
         Args:
             smiles_list (str): list of SMILES strings
             noprice (bool, optional): Whether to not use the molecules price as
-                its score, if available. (default: {False})
+                its score, if available. (default: {True})
         """
         return np.max([
             self.get_score_from_smiles(smiles, noprice=noprice)
@@ -235,7 +235,9 @@ class SCScorePrecursorPrioritizer(Prioritizer):
         """Reorder a list of precursors by their SCScore. Sorts so lower SCScore is higher rank.
 
         Args:
-            precursors (list of dict)
+            precursors (list of dict): list of precursor dictionaires
+            noprice (bool, optional): Whether to not use the molecules price as
+                its score, if available. (default: {True})
 
         Returns:
             list: reordered list of precursor dictionaries with new 'score' and 'rank' keys

@@ -6,6 +6,7 @@ from rdchiral.main import rdchiralRun
 
 import askcos.global_config as gc
 from askcos.interfaces.template_transformer import TemplateTransformer
+from askcos.prioritization.precursors.scscore import SCScorePrecursorPrioritizer
 from askcos.prioritization.precursors.relevanceheuristic import RelevanceHeuristicPrecursorPrioritizer
 from askcos.prioritization.templates.relevance import RelevanceTemplatePrioritizer
 from askcos.synthetic.evaluation.fast_filter import FastFilterScorer
@@ -50,7 +51,7 @@ class RetroTransformer(TemplateTransformer):
     def __init__(
             self, use_db=True, TEMPLATE_DB=None, load_all=gc.PRELOAD_TEMPLATES,
             template_set='reaxys', template_prioritizer='reaxys',
-            precursor_prioritizer='relevanceheuristic',
+            precursor_prioritizer='relevanceheuristic', scscorer='default',
             fast_filter='default', cluster='default',
             cluster_settings=None,
     ):
@@ -69,6 +70,12 @@ class RetroTransformer(TemplateTransformer):
                 (smiles, max_num_templates, max_cum_prob) arguments and 
                 returns np.ndarrays of type np.float32 for (scores, indices)
                 of templates to use.
+            precursor_prioritizer (str or Prioritizer): Precursor prioritizer
+                to use. This can either be 'default' or an instance of a 
+                precursor prioritizer that reorders a list of precursors and 
+                returns the reordered list.
+            scscorer (str or callable): This should be a callable that returns 
+                an scscore given a joined smiles string.
         """
 
         self.templates = []
@@ -76,6 +83,7 @@ class RetroTransformer(TemplateTransformer):
         self.TEMPLATE_DB = TEMPLATE_DB
         self.template_prioritizer = template_prioritizer
         self.precursor_prioritizer = precursor_prioritizer
+        self.scscorer = scscorer
         self.fast_filter = fast_filter
         self.cluster = cluster
         self.cluster_settings = cluster_settings or {}
@@ -109,6 +117,11 @@ class RetroTransformer(TemplateTransformer):
         if self.cluster == 'default':
             MyLogger.print_and_log('Using default clustering for RetroTransformer', retro_transformer_loc)
             self.cluster = cluster_precursors
+
+        if self.scscorer == 'default':
+            self.scscorer = SCScorePrecursorPrioritizer()
+            self.scscorer.load_model()
+            self.scscorer = self.scscorer.get_max_score_from_joined_smiles
 
         MyLogger.print_and_log('Loading retro-synthetic transformer', retro_transformer_loc)
         if self.use_db:
@@ -213,7 +226,7 @@ class RetroTransformer(TemplateTransformer):
         return templates
 
     def get_outcomes(
-            self, smiles, precursor_prioritizer=None,
+            self, smiles, precursor_prioritizer=None, scscorer=None,
             template_set=None, template_prioritizer=None,
             fast_filter=None, fast_filter_threshold=0.75,
             max_num_templates=100, max_cum_prob=0.995,
@@ -237,6 +250,9 @@ class RetroTransformer(TemplateTransformer):
                 prioritizer created during initialization. This can be
                 any callable function that reorders a list of precursor
                 dictionary objects.
+            scscorer (optional, callable): Use to override scscorer created
+                during initialization. This should be a callable function that
+                returns an scscore for a joined smiles string.
             fast_filter (optional, callable): Use to override fast filter
                 created during initialization. This can be any callable 
                 function that accepts (reactants, products) smiles strings 
@@ -278,6 +294,9 @@ class RetroTransformer(TemplateTransformer):
         if cluster_settings is None:
             cluster_settings = self.cluster_settings
 
+        if scscorer is None:
+            scscorer = self.scscorer
+
         mol = Chem.MolFromSmiles(smiles)
         smiles = Chem.MolToSmiles(mol, isomericSmiles=True)
         mol = rdchiralReactants(smiles)
@@ -296,9 +315,10 @@ class RetroTransformer(TemplateTransformer):
             for precursor in precursors:
                 precursor['template_score'] = score
                 joined_smiles = '.'.join(precursor['smiles_split'])
-                precursor['rms_molwt'] = -rms_molecular_weight(joined_smiles)
-                precursor['num_rings'] = -number_of_rings(joined_smiles)
+                precursor['rms_molwt'] = rms_molecular_weight(joined_smiles)
+                precursor['num_rings'] = number_of_rings(joined_smiles)
                 precursor['plausibility'] = fast_filter(joined_smiles, smiles)
+                precursor['scscore'] = scscorer(joined_smiles)
                 # skip if no transformation happened or plausibility is below threshold
                 if joined_smiles == smiles or precursor['plausibility'] < fast_filter_threshold:
                     continue

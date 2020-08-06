@@ -1,3 +1,5 @@
+import numpy as np
+import pandas as pd
 import rdkit.Chem as Chem
 from pymongo import MongoClient
 from pymongo.errors import ServerSelectionTimeoutError
@@ -21,35 +23,19 @@ class RetroTransformer(TemplateTransformer):
     """Defines an object to perform one-step retrosyntheses for a molecule.
 
     Attributes:
-        mincount (int): Minimum number of precedents for an achiral template for
-            inclusion in the template library. Only used when retrotransformers
-            need to be initialized.
-        mincount_chiral (int): Minimum number of precedents for a chiral
-            template for inclusion in the template library. Only used when
-            retrotransformers need to be initialized. Chiral templates are
-            necessarily more specific, so we generally use a lower threshold
-            than achiral templates.
+        load_all (bool): Whether to load all of the templates into memory.
         templates (list): Templates to use for transformation.
-        celery (bool): Whether or not Celery is being used.
-        TEMPLATE_DB (None or MongoDB): Database to load templates from.
-        lookup_only (bool): Whether to only lookup templates in the database
-            (instead of loading the entire database).
         precursor_prioritizers (dict): Mapping of precursor prioritizer names to
             objects.
-        template_prioritizers (dict):Mapping of template prioritizer names to
-            objects.
-        precursor_prioritizer (None or str): Specifies which precursor
-            prioritizer to use.
-        template_prioritizer (None or str): Specifies which template prioritizer
-            to use.
-        num_templates (int): Number of templates loaded.
-        fast_filter (FastFilterScorer or None): Fast filter for evaluation.
-        load_all (bool): Whether to load all of the templates into memory.
-        use_db (bool): Whether to use the database to look up templates.
+        template_prioritizer (Prioritizer): Prioritizer that implements a predict 
+            method to return template priority for a given target SMILES.
+        precursor_prioritizer (Prioritizer): Prioritizer that ranks and orders 
+            precursors.
+        fast_filter (FastFilterScorer): Fast filter for evaluation.
     """
 
     def __init__(
-            self, use_db=True, TEMPLATE_DB=None, load_all=gc.PRELOAD_TEMPLATES,
+            self, load_all=gc.PRELOAD_TEMPLATES,
             template_set='reaxys', template_prioritizer='reaxys',
             precursor_prioritizer='relevanceheuristic', scscorer='default',
             fast_filter='default', cluster='default',
@@ -58,12 +44,9 @@ class RetroTransformer(TemplateTransformer):
         """Initializes RetroTransformer.
 
         Args:
-            use_db (bool, optional): Whether to use the database to look up
-                templates. (default: {True})
-            TEMPLATE_DB (None or MongoDB, optional): Database to load
-                templates from. (default: {None})
             load_all (bool, optional): Whether to load all of the templates into
                 memory. (default: {gc.PRELOAD_TEMPLATES})
+            template_set (str): Name of the template set to use
             template_prioritizer (str or Prioritizer): Template prioritizer 
                 to use. This can either be 'relevance' or an instance of type 
                 Prioritizer the implements a predict method that takes 
@@ -76,11 +59,12 @@ class RetroTransformer(TemplateTransformer):
                 returns the reordered list.
             scscorer (str or callable): This should be a callable that returns 
                 an scscore given a joined smiles string.
+            fast_filter (FastFilterScorer): Fast filter for evaluation.
         """
 
         self.templates = []
+        self.template_attributes = None
         self.template_set = template_set
-        self.TEMPLATE_DB = TEMPLATE_DB
         self.template_prioritizer = template_prioritizer
         self.precursor_prioritizer = precursor_prioritizer
         self.scscorer = scscorer
@@ -88,12 +72,17 @@ class RetroTransformer(TemplateTransformer):
         self.cluster = cluster
         self.cluster_settings = cluster_settings or {}
 
-        super(RetroTransformer, self).__init__(load_all=load_all, use_db=use_db)
+        super(RetroTransformer, self).__init__(load_all=load_all)
 
-    def load(self, template_filename=None):
-        if template_filename is None:
-            template_filename = gc.RETRO_TEMPLATES['file_name']
-
+    def load(self, template_filename=None, load_templates=True):
+        """Load data and models usedd by RetroTransformer
+        
+        Args:
+            template_filename (str, optional): Path to tempalte filename
+            skip_templates (bool, optional): Whether or not to try to load 
+                templates from files
+        
+        """
         if self.template_prioritizer in gc.RELEVANCE_TEMPLATE_PRIORITIZATION:
             MyLogger.print_and_log('Loading template prioritizer for RetroTransformer', retro_transformer_loc)
             template_prioritizer = RelevanceTemplatePrioritizer()
@@ -124,18 +113,9 @@ class RetroTransformer(TemplateTransformer):
             self.scscorer = self.scscorer.get_max_score_from_joined_smiles
 
         MyLogger.print_and_log('Loading retro-synthetic transformer', retro_transformer_loc)
-        if self.use_db:
-            self.load_databases()
-            try:
-                self.TEMPLATE_DB.find_one({})  # check if connection to db exists
-                if self.load_all:
-                    self.load_from_database()
-                    self.use_db = False  # it doesn't make sense to load all templates into memory and then continue to use templates from DB
-            except ServerSelectionTimeoutError:
-                MyLogger.print_and_log('cannot connect to db, reading from file instead', retro_transformer_loc)
-                self.use_db = False
-                self.load_from_file(template_filename, self.template_set)
-        else:
+        if load_templates:
+            if template_filename is None:
+                template_filename = gc.RETRO_TEMPLATES['file_name']
             MyLogger.print_and_log('reading from file', retro_transformer_loc)
             self.load_from_file(template_filename, self.template_set)
 
@@ -152,49 +132,36 @@ class RetroTransformer(TemplateTransformer):
         """
         if template_set is None:
             template_set = self.template_set
-
-        if self.use_db:
-            db_client = MongoClient(
-                gc.MONGO['path'], gc.MONGO['id'], connect=gc.MONGO['connect']
-            )
-            db_name = gc.RETRO_TEMPLATES['database']
-            collection = gc.RETRO_TEMPLATES['collection']
-            self.TEMPLATE_DB = db_client[db_name][collection]
-            template = self.TEMPLATE_DB.find_one(
-                {
-                    'index': index,
-                    'template_set': template_set
-                }
-            )
-        else:
-            template = list(filter(
-                lambda x: x['template_set'] == template_set and x['index'] == index,
-                self.templates
-            ))
-            if len(template) != 1:
-                raise ValueError('Duplicate templates found when trying to retrieve one unique template!')
-            template = template[0]
-
-        if not self.load_all:
-            template = self.doc_to_template(template)
+            
+        template = list(filter(
+            lambda x: x['template_set'] == template_set and x['index'] == index,
+            self.templates
+        ))
 
         if not template:
             raise ValueError('Could not find template from template set "{}" with index "{}"'.format(
                 template_set, index
             ))
 
+        if len(template) != 1:
+            raise ValueError('Duplicate templates found when trying to retrieve one unique template!')
+        template = template[0]
+
+        if not self.load_all:
+            template = self.doc_to_template(template)
+
         return template
 
-    def order_templates_by_indices(self, indices, template_set=None):
-        """Reorders and returns templates given specified indices.
-
-        Handles use of a database, multiple template sets, as well as preloading templates.
+    def get_templates_by_indices(self, indices, template_set=None):
+        """Returns templates from given template set with given indices
 
         Args:
-            indices (np.ndarray): Numpy array of indices to reorder templates.
+            indices (np.array): indices of templates to return
+            template_set (str, optional): Template set from which to 
+                retrieve templates
 
         Returns:
-            Generator of templates to be applied (i.e. - with rxn object)
+            list: templates ready to be applied (with `rxn` attribute)
 
         """
         if template_set is None:
@@ -202,20 +169,10 @@ class RetroTransformer(TemplateTransformer):
 
         index_list = indices.tolist()
 
-        if self.use_db:
-            templates = list(
-                self.TEMPLATE_DB.find(
-                    {
-                        'index': {'$in': index_list},
-                        'template_set': template_set
-                    }
-                )
-            )
-        else:
-            templates = list(filter(
-                lambda x: x['template_set'] == template_set and x['index'] in indices,
-                self.templates
-            ))
+        templates = list(filter(
+            lambda x: x['template_set'] == template_set and x['index'] in indices,
+            self.templates
+        ))
 
         templates.sort(key=lambda x: index_list.index(x['index']))
 
@@ -225,13 +182,51 @@ class RetroTransformer(TemplateTransformer):
 
         return templates
 
+    def filter_by_attributes(self, scores, indices, attribute_filter, template_set=None):
+        """Filters template indices by attribute filter(s)
+
+        Args:
+            scores (np.array): scores predicted for prioritized templates
+            indices (np.array): indices of prioritized templates
+            attribute_filter (list[dict]): list of dictionaries defining 
+                attribute filters. The format should be {'name': <str>, 
+                'logic': <str>, 'value': <int/float>} where `logic` should be
+                one of ['>', '>=', '<', '<=', '==].
+            template_set (str, optional): NOT USED.
+
+        Returns:
+            np.array, np.array: scores, indices, of prioritized templates 
+                following application of attribute filters
+        """
+        if self.template_attributes is None:
+            self.template_attributes = pd.DataFrame([
+                template.get('attributes', {})
+                for template in self.templates
+            ])
+        filters = [
+            x for x in attribute_filter 
+            if x.get('name') in self.template_attributes
+        ]
+        if not filters:
+            return scores, indices
+        filtered_indices = self.template_attributes.query(
+            ' and '.join([
+                '({name} {logic} {value})'.format(**filter_query)
+                for filter_query in filters
+            ])
+        ).index.values
+        bool_mask = np.isin(indices, filtered_indices)
+        indices = indices[bool_mask]
+        scores = scores[bool_mask]
+        return scores, indices
+
     def get_outcomes(
             self, smiles, precursor_prioritizer=None, scscorer=None,
             template_set=None, template_prioritizer=None,
             fast_filter=None, fast_filter_threshold=0.75,
             max_num_templates=100, max_cum_prob=0.995,
             cluster_precursors=True, cluster=None, cluster_settings=None,
-            selec_check=False, **kwargs
+            selec_check=False, attribute_filter=[], **kwargs
     ):
         """Performs a one-step retrosynthesis given a SMILES string.
 
@@ -243,7 +238,7 @@ class RetroTransformer(TemplateTransformer):
             template_prioritizer (optional, Prioritizer): Use to override
                 prioritizer created during initialization. This can be 
                 any Prioritizer instance that implements a predict method 
-                that accepts (smiles, templates, max_num_templates, max_cum_prob) 
+                that accepts (smiles, max_num_templates, max_cum_prob) 
                 as arguments and returns a (scores, indices) for templates
                 up until max_num_templates or max_cum_prob.
             precursor_prioritizer (optional, callable): Use to override
@@ -253,12 +248,18 @@ class RetroTransformer(TemplateTransformer):
             scscorer (optional, callable): Use to override scscorer created
                 during initialization. This should be a callable function that
                 returns an scscore for a joined smiles string.
+            template_set (str, optional): Template set from which to 
+                retrieve templates
             fast_filter (optional, callable): Use to override fast filter
                 created during initialization. This can be any callable 
                 function that accepts (reactants, products) smiles strings 
                 as arguments and returns a score on the range [0.0, 1.0].
             fast_filter_threshold (float): Fast filter threshold to filter
                 bad predictions. 1.0 means use all templates.
+            max_num_templates (int): Maximum number of template scores and 
+                indices to return when calculating next probabilities.
+            max_cum_prob (float): Maximum cumulative probabilites of template 
+                scores to try and apply.
             cluster_precursors (optional, bool): Whether to run clustering
             cluster (optional, callable): Use to override cluster method.
                 This can be any callable that accepts 
@@ -268,12 +269,15 @@ class RetroTransformer(TemplateTransformer):
             cluster_settings (optional, dict): Dictionary of cluster specific settings
                 to be passed to clustering method.
             selec_check (optional, bool): Apply selectivity checking for the predicted precursors
+            attribute_filter (list[dict]): list of dictionaries defining 
+                attribute filters. The format should be {'name': <str>, 
+                'logic': <str>, 'value': <int/float>} where `logic` should be
+                one of ['>', '>=', '<', '<=', '==].
             **kwargs: Additional kwargs to pass through to prioritizers or to
                 handle deprecated options.
 
         Returns:
-             RetroResult: Special object for a retrosynthetic expansion result,
-                defined by ./results.py
+             list: list of dictionaries representing precursor results
         """
 
         if template_set is None:
@@ -304,11 +308,20 @@ class RetroTransformer(TemplateTransformer):
         results = []
         smiles_to_index = {}
 
-        scores, indices = template_prioritizer.predict(
-            smiles, max_num_templates=max_num_templates, max_cum_prob=max_cum_prob
-        )
+        scores, indices = template_prioritizer.predict(smiles, max_num_templates=None, max_cum_prob=None)
 
-        templates = self.order_templates_by_indices(indices, template_set)
+        scores, indices = self.filter_by_attributes(scores, indices, attribute_filter, template_set)
+
+        if max_num_templates is not None:
+            indices = indices[:max_num_templates]
+            scores = scores[:max_num_templates]
+
+        if max_cum_prob is not None:
+            cum_scores = np.cumsum(scores)
+            scores = scores[cum_scores <= max_cum_prob]
+            indices = indices[cum_scores <= max_cum_prob]
+
+        templates = self.get_templates_by_indices(indices, template_set)
 
         for template, score in zip(templates, scores):
             precursors = self.apply_one_template(mol, template, record_rxn=selec_check)
@@ -360,7 +373,7 @@ class RetroTransformer(TemplateTransformer):
         return results
 
     def apply_one_template(self, mol, template, record_rxn=False):
-        """Applies one template to a molecules and returns precursors.
+        """Applies one template to a molecule and returns precursors.
 
         Args:
             mol (rdchiralReactants): rdchiral reactants molecules to apply
@@ -370,7 +383,7 @@ class RetroTransformer(TemplateTransformer):
             record_rxn (bool): wether to include the reaction template smiles in the result
 
         Returns:
-            List of dictionaries representing precursors generated from 
+            list: list of dictionaries representing precursors generated from 
                 template application.
 
         """
@@ -409,12 +422,11 @@ class RetroTransformer(TemplateTransformer):
         return results
 
     def apply_one_template_to_precursors(self, precursors, template):
-        """
-        Apply one backward template to precursors to get outcomes.
+        """Apply one reversed retro template to precursors to get outcomes.
 
         Args:
             precursors (str): atom mapped smiles for precursors
-            template (str): backward template to be applied
+            template (str): retro template to be applied
 
         Returns:
             (dict) {smiles: mappedsmiles}
@@ -490,6 +502,7 @@ class RetroTransformer(TemplateTransformer):
         seen_reactant_combos = []
 
         template = self.get_one_template_by_idx(template_idx, template_set)
+
         try:
             template['rxn'] = rdchiralReaction(template['reaction_smarts'])
         except ValueError:
@@ -509,14 +522,12 @@ class RetroTransformer(TemplateTransformer):
             if calculate_next_probs:
                 for reactant_smi in precursor['smiles_split']:
                     if reactant_smi not in seen_reactants:
-                        scores, indeces = template_prioritizer.predict(
-                            reactant_smi, max_num_templates=max_num_templates, max_cum_prob=max_cum_prob
-                        )
-                        # scores and indeces will be passed through celery, need to be lists
+                        scores, indices = template_prioritizer.predict(reactant_smi, max_num_templates=max_num_templates, max_cum_prob=max_cum_prob)
+                        # scores and indices will be passed through celery, need to be lists
                         scores = scores.tolist()
-                        indeces = indeces.tolist()
+                        indices = indices.tolist()
                         value = 1
-                        seen_reactants[reactant_smi] = (reactant_smi, scores, indeces, value)
+                        seen_reactants[reactant_smi] = (reactant_smi, scores, indices, value)
                     reactants.append(seen_reactants[reactant_smi])
                 all_outcomes.append((_id, smiles, template_idx, reactants, fast_filter_score))
             else:

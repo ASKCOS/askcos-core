@@ -116,7 +116,6 @@ class MCTS:
         self.pricer = pricer or self.load_pricer(kwargs.get('use_db', False))
         self.chemhistorian = chemhistorian or self.load_chemhistorian(kwargs.get('use_db', False))
         self.retroTransformer = retroTransformer or self.load_retro_transformer(
-            use_db=kwargs.get('use_db', False),
             template_set=template_set,
             precursor_prioritizer=precursor_prioritizer,
         )
@@ -149,12 +148,11 @@ class MCTS:
         return chemhistorian
 
     @staticmethod
-    def load_retro_transformer(use_db, template_set='reaxys', precursor_prioritizer='relevanceheuristic'):
+    def load_retro_transformer(template_set='reaxys', precursor_prioritizer='relevanceheuristic'):
         """
         Loads retro transformer model.
         """
         retro_transformer = RetroTransformer(
-            use_db=use_db,
             template_set=template_set,
             template_prioritizer=None,
             precursor_prioritizer=precursor_prioritizer,
@@ -817,7 +815,8 @@ class MCTS:
         initialize the tree search.
         """
         template_prioritizer = self.load_template_prioritizer(self.template_prioritizer)
-        return template_prioritizer.predict(self.smiles, self.template_count, self.max_cum_template_prob)
+        scores, indices = template_prioritizer.predict(self.smiles, self.template_count, self.max_cum_template_prob)
+        return scores, indices
 
     # QUESTION: Why return the empty list?
     def tree_status(self):
@@ -831,6 +830,21 @@ class MCTS:
         num_chemicals = len(self.Chemicals)
         num_reactions = len(self.status)
         return num_chemicals, num_reactions, []
+
+    def tid_list_to_info_dict(self, tids):
+        """
+        Returns dict of info from a given list of templates.
+
+            Args:
+                tids (list of int): Template IDs to get info about.
+        """
+        templates = [self.retroTransformer.templates[tid] for tid in tids]
+
+        return {
+            'tforms': [str(t.get('_id', -1)) for t in templates],
+            'num_examples': int(sum([t.get('count', 1) for t in templates])),
+            'necessary_reagent': templates[0].get('necessary_reagent', ''),
+        }
 
     def return_trees(self):
         """Returns retrosynthetic pathways trees and their size."""
@@ -847,27 +861,6 @@ class MCTS:
                 'ppg': self.Chemicals[smi].purchase_price,
                 'as_reactant': self.Chemicals[smi].as_reactant,
                 'as_product': self.Chemicals[smi].as_product,
-            }
-
-        def tid_list_to_info_dict(tids):
-            """
-            Returns dict of info from a given list of templates.
-
-                Args:
-                    tids (list of int): Template IDs to get info about.
-            """
-            if self.retroTransformer.load_all or not self.retroTransformer.use_db:
-                templates = [self.retroTransformer.templates[tid] for tid in tids]
-            else:
-                templates = list(self.retroTransformer.TEMPLATE_DB.find({
-                    'index': {'$in': tids},
-                    'template_set': self.template_set,
-                }))
-
-            return {
-                'tforms': [str(t.get('_id', -1)) for t in templates],
-                'num_examples': int(sum([t.get('count', 1) for t in templates])),
-                'necessary_reagent': templates[0].get('necessary_reagent', ''),
             }
 
         seen_rxnsmiles = {}
@@ -929,7 +922,7 @@ class MCTS:
                         for path in DLS_rxn(chem_smi, tid, rct_smi, depth):
                             yield [rxn_dict(rxnsmiles_to_id(rxn_smiles), rxn_smiles, children=path,
                                             plausibility=rxn.plausibility, template_score=rxn.template_score,
-                                            **tid_list_to_info_dict(rxn.tforms))]
+                                            **self.tid_list_to_info_dict(rxn.tforms))]
                         done_children_of_this_chemical.append(rxn_smiles)
 
         def DLS_rxn(chem_smi, template_idx, rct_smi, depth):

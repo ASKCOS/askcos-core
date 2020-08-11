@@ -73,6 +73,9 @@ class MCTS:
                 checking stop criteria (buyability). If None, will be
                 initialized using default settings from the global
                 configuration. (default: {None})
+            scscorer (None or SCScorePrecursorPrioritizer, optional): SCScore
+                instance for evaluating termination criteria. If None, will be
+                loaded using default settings. (default: {None})
             max_branching (int, optional): Maximum number of precursor
                 suggestions to add to the tree at each expansion.
                 (default: {20})
@@ -90,6 +93,14 @@ class MCTS:
                 global configuration. (default: {None})
             num_active_pathways (None or int, optional): Number of active
                 pathways. If None, will be set to ``nproc``. (default: {None})
+            template_prioritizer (str, optional): Specifies which template
+                prioritizer to use. (default: {'reaxys'})
+            template_set (str, optional): Specifies which template set to use.
+                (default: {'reaxys'})
+            precursor_prioritizer (str, optional): Specify precursor prioritizer
+                to be used. (default: {'relevanceheuristic'})
+            fast_filter (str, optional): Specify fast filter to be used for
+                scoring reactions. (default: {'default'})
         """
 
         if 'chiral' in kwargs and not kwargs['chiral']:
@@ -1118,14 +1129,18 @@ class MCTS:
                 to consider. (default: {100})
             max_cum_template_prob (float, optional): Maximum cumulative
                 probability of selected relevant templates. (default: {0.995})
-            max_elements (defaultdict, optional): Specifies maximum amounts
-                for certain atoms and the logic it should use to select a
-                chemical (buyable, buyable or max atoms, buyable and max atoms).
-                (default: None)
-            min_history (dict, optional): Minimum number of times
-                a chemical must appear as a reactant or product to be selected
-                when logic is "OR" and chemical is not buyable.
-                (default: None)
+            max_scscore (int, optional): Maximum synthetic complexity score for
+                a chemical to be considered terminal. (default: {None})
+            max_elements (dict, optional): Maximum number of certain elements
+                for a chemical to be considered terminal. (default: {None})
+            min_history (dict, optional): Minimum number of prior appearances
+                as a reactant or product for a chemical to be considered
+                terminal. (default: {None})
+            termination_logic (dict, optional): Defines logic to be used when
+                determining if a chemical is terminal. Should contain two keys,
+                ['and', 'or'], and list of criteria as values. Supported
+                criteria: ['buyable', 'max_ppg', 'max_scscore', 'max_elements',
+                'max_history']. (default: {None})
             apply_fast_filter (bool, optional): Whether to apply the fast
                 filter. (default: {True})
             filter_threshold (float, optional): Threshold to use for the fast
@@ -1138,6 +1153,8 @@ class MCTS:
                 (default: {'plausibility'})
             template_prioritizer (str, optional): Specifies which template
                 prioritizer to use. (default: {'reaxys'})
+            template_set (str, optional): Specifies which template set to use.
+                (default: {'reaxys'})
             buyables_source (str or list, optional): Specifies source of buyables
                 data to use. Will use all available data if not provided.
             **kwargs: Additional optional arguments.

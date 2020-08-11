@@ -36,6 +36,9 @@ class SCScorePrecursorPrioritizer(Prioritizer):
         Args:
             score_scale (float, optional): Upper-bound of scale for scoring.
                 (default: {5.0})
+            pricer (None or Pricer, optional): Pricer instance to look up
+                chemical costs. If None, will be loaded using default
+                settings. (default: {None})
         """
         self.vars = []
         self.FP_rad = 2

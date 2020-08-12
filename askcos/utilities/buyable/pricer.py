@@ -79,7 +79,7 @@ class Pricer:
         else:
             MyLogger.print_and_log('Buyables file does not exist: {}'.format(file_name), pricer_loc)
 
-    def lookup_smiles(self, smiles, source='all', alreadyCanonical=False, isomericSmiles=True):
+    def lookup_smiles(self, smiles, source=None, alreadyCanonical=False, isomericSmiles=True):
         """
         Looks up a price by SMILES. Canonicalize smiles string unless 
         the user specifies that the smiles string is definitely already 
@@ -96,7 +96,7 @@ class Pricer:
         if self.use_db:
             query = {'smiles': smiles}
 
-            if source != 'all':
+            if source is not None:
                 if isinstance(source, list):
                     query['source'] = {'$in': source}
                 else:

@@ -1228,9 +1228,9 @@ class MCTS:
             return bool(ppg)
 
         def max_ppg():
-            if self.max_ppg is not None and ppg is not None:
+            if self.max_ppg is not None:
                 # ppg of 0 means not buyable
-                return 0 < ppg <= self.max_ppg
+                return ppg is not None and 0 < ppg <= self.max_ppg
             return True
 
         def max_scscore():
@@ -1253,16 +1253,17 @@ class MCTS:
             return True
 
         def min_history():
-            if self.min_history is not None and hist is not None:
-                return (hist['as_reactant'] >= self.min_history['as_reactant'] or
-                        hist['as_product'] >= self.min_history['as_product'])
+            if self.min_history is not None:
+                return hist is not None and (hist['as_reactant'] >= self.min_history['as_reactant'] or
+                                             hist['as_product'] >= self.min_history['as_product'])
             return True
 
         local_dict = locals()
+        or_criteria = self.termination_logic.get('or')
+        and_criteria = self.termination_logic.get('and')
 
-        return (any(local_dict[criteria]() for criteria in self.termination_logic['or']) or
-                self.termination_logic['and'] and
-                all(local_dict[criteria]() for criteria in self.termination_logic['and']))
+        return (bool(or_criteria) and any(local_dict[criteria]() for criteria in or_criteria) or
+                bool(and_criteria) and all(local_dict[criteria]() for criteria in and_criteria))
 
     def return_chemical_results(self):
         results = defaultdict(list)

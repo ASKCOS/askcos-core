@@ -53,28 +53,37 @@ class RelevanceTemplatePrioritizer(Prioritizer):
             ), dtype=np.float32
         )
 
-    def predict(self, smiles, max_num_templates, max_cum_prob):
+    def predict(self, smiles, max_num_templates=None, max_cum_prob=None):
         """Predicts template priority given a SMILES string.
 
         Args:
             smiles (str): SMILES string of input molecule
-            max_num_templates (int): Maximum number of template scores
-                and indices to return
-            max_cum_prob (float): Maximum cumulative probability of template
-                scores to return. Scores and indices will be returned up until
-                max_cum_prob, without exceeding it.
 
         Returns:
             (scores, indices): np.ndarrays of scores and indices for 
                 prioritized templates
+            max_num_templates (int, optional): maximum number of templates to 
+                return {default = None}
+            max_cum_prob (float, optional): maximum cumulative probability of 
+                template relvance scores. This is used to limit the number of 
+                templates that get returned {default = None}
         """
-        fp = self.smiles_to_fp(smiles)
-        scores = self.model.predict(fp.reshape(1, -1)).reshape(-1)
+        fp = self.smiles_to_fp(smiles).reshape(1, -1)
+        scores = self.model.predict(fp).reshape(-1)
         scores = softmax(scores)
-        indices = np.argsort(-scores)[:max_num_templates]
+        indices = np.argsort(-scores)
         scores = scores[indices]
-        cum_scores = np.cumsum(scores)
-        return scores[cum_scores <= max_cum_prob], indices[cum_scores <= max_cum_prob]
+
+        if max_num_templates is not None:
+            indices = indices[:max_num_templates]
+            scores = scores[:max_num_templates]
+
+        if max_cum_prob is not None:
+            cum_scores = np.cumsum(scores)
+            scores = scores[cum_scores <= max_cum_prob]
+            indices = indices[cum_scores <= max_cum_prob]
+
+        return scores, indices
 
 
 if __name__ == '__main__':

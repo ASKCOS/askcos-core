@@ -18,35 +18,18 @@ class TemplateTransformer(object):
     """One-step retrosynthesis transformer.
 
     The TemplateTransformer class defines an object which can be used to perform
-    one-step retrosyntheses for a given molecule.
-
-    Attributes:
-        id_to_index (dict): Maps template ID to index in ``self.templates``.
-        precursor_prioritizers ():
-        precursor_prioritizer ():
-        template_prioritizers ():
-        template_prioritizer ():
-        templates ():
-        num_templates (int): Number of templates loaded by the transformer.
-        chiral (bool): Whether to properly handle chirality.
-        mincount (int): Minimum template popularity.
-        mincount_chiral (int): Minimum template popularity for chiral templates.
-        TEMPLATE_DB ():
+    one-step chemical tranformations for a given molecule.
     """
 
-    def __init__(self, load_all=gc.PRELOAD_TEMPLATES, use_db=True, TEMPLATE_DB=None):
+    def __init__(self, load_all=gc.PRELOAD_TEMPLATES):
         """Initializes TemplateTransformer.
 
         Args:
             load_all (bool, optional): Whether to load all of the templates into
                 memory. (default: {gc.PRELOAD_TEMPLATES})
-            use_db (bool, optional): Whether to use the database to look up
-                templates. (default: {True})
         """
         self.templates = []
         self.load_all = load_all
-        self.use_db = use_db
-        self.TEMPLATE_DB = TEMPLATE_DB
         self.id_to_index = {} # Dictionary to keep track of ID -> index in self.templates
 
     def doc_to_template(self, document, retro=True):
@@ -122,10 +105,6 @@ class TemplateTransformer(object):
             chiral (bool, optional): Whether to care about chirality.
                 (default: {False})
         """
-
-        if self.use_db:
-            MyLogger.print_and_log('Cannot write templates when using db', transformer_loc)
-            return
         if not self.templates:
             raise ValueError('Cannot dump to file if templates have not been loaded')
         
@@ -215,41 +194,10 @@ class TemplateTransformer(object):
         Returns:
             Reaction SMARTS for requested template.
         """
-        if self.use_db:
-            template = self.TEMPLATE_DB.find_one({'_id': ObjectId(template_id)})
-            if template:
-                return template
-            else:
-                return self.TEMPLATE_DB.find_one({'_id': template_id})
-        else:
-            return self.templates[self.id_to_index[template_id]]
+        if not self.templates:
+            raise ValueError('Cannot lookup template if templates have not been loaded')
 
-    def load_from_database(self):
-        """Read the template data from the database."""
-        if not self.use_db:
-            MyLogger.print_and_log('Error: Cannot load from database when use_db=False',
-                transformer_loc, level=3)
-
-        if not self.TEMPLATE_DB:
-            self.load_databases()
-
-        # Look for all templates in collection
-        to_retrieve = [
-            '_id', 'reaction_smarts',
-            'necessary_reagent', 'count', 
-            'intra_only', 'dimer_only', 'index',
-            'references', 'template_set'
-        ]
-        for document in self.TEMPLATE_DB.find({}, to_retrieve).sort('index', pymongo.ASCENDING):
-            if self.load_all:
-                template = self.doc_to_template(document)
-                if template is not None:
-                    self.templates.append(template)
-            else:
-                _id = document.get('_id')
-                if _id:
-                    self.templates.append(_id)
-        self.num_templates = len(self.templates)
+        return self.templates[self.id_to_index[template_id]]
 
     def get_outcomes(self, *args, **kwargs):
         """Gets outcome of single transformation.
@@ -259,25 +207,6 @@ class TemplateTransformer(object):
         sequentially.
         """
         raise NotImplementedError
-
-    def load_databases(self, timeout=1000):
-        """Loads the databases specified by the global config.
-
-        Args:
-            retro (bool): Whether to load the retrosynthetic databases.
-            chiral (bool, optional): Whether to properly handle chirality.
-                (default: {False})
-            timeout (int, optional): Timeout in ms to use before determining the
-                database server is not available. (default: {15000})
-        """
-
-        db_client = MongoClient(gc.MONGO['path'], gc.MONGO[
-                                'id'], connect=gc.MONGO['connect'],
-                                serverSelectionTimeoutMS=timeout)
-
-        db_name = gc.RETRO_TEMPLATES['database']
-        collection = gc.RETRO_TEMPLATES['collection']
-        self.TEMPLATE_DB = db_client[db_name][collection]
 
     def apply_one_template(self, *args, **kwargs):
         """Applies a single template to a given molecule.

@@ -635,44 +635,56 @@ class MCTS:
         Determine if the specified chemical is a terminal node in the tree based
         on pre-specified criteria.
 
-        The current setup uses ppg as a mandatory criteria, with atom counts and
-        chemical history data being optional, additional criteria.
+        Criteria to be considered are specified via ``self.termination_logic``,
+        and the thresholds for each criteria are specified separately.
+
+        If no criteria are specified, will always return ``False``.
 
         Args:
             smiles (str): smiles string of the chemical
             ppg (float): cost of the chemical
             hist (dict): historian data for the chemical
         """
-        # Default to buyability
-        results = {'and': [bool(ppg)], 'or': []}
+        def buyable():
+            return bool(ppg)
 
-        if self.max_ppg is not None and ppg is not None:
-            logic = self.termination_logic.get('max_ppg', 'and')
-            results[logic].append(ppg <= self.max_ppg)
+        def max_ppg():
+            if self.max_ppg is not None:
+                # ppg of 0 means not buyable
+                return ppg is not None and 0 < ppg <= self.max_ppg
+            return True
 
-        if self.max_scscore is not None:
-            scscore = self.scscorer.get_score_from_smiles(smiles, noprice=True)
-            logic = self.termination_logic.get('max_scscore', 'or')
-            results[logic].append(scscore <= self.max_scscore)
+        def max_scscore():
+            if self.max_scscore is not None:
+                scscore = self.scscorer.get_score_from_smiles(smiles, noprice=True)
+                return scscore <= self.max_scscore
+            return True
 
-        if self.max_elements is not None:
-            # Get structural properties
-            mol = Chem.MolFromSmiles(smiles)
-            if mol:
-                elem_dict = defaultdict(lambda: 0)
-                for a in mol.GetAtoms():
-                    elem_dict[a.GetSymbol()] += 1
-                elem_dict['H'] = sum(a.GetTotalNumHs() for a in mol.GetAtoms())
+        def max_elements():
+            if self.max_elements is not None:
+                # Get structural properties
+                mol = Chem.MolFromSmiles(smiles)
+                if mol:
+                    elem_dict = defaultdict(lambda: 0)
+                    for a in mol.GetAtoms():
+                        elem_dict[a.GetSymbol()] += 1
+                    elem_dict['H'] = sum(a.GetTotalNumHs() for a in mol.GetAtoms())
 
-                logic = self.termination_logic.get('max_elements', 'or')
-                results[logic].append(all(elem_dict[k] <= v for k, v in self.max_elements.items()))
+                    return all(elem_dict[k] <= v for k, v in self.max_elements.items())
+            return True
 
-        if self.min_history is not None and hist is not None:
-            logic = self.termination_logic.get('min_history', 'or')
-            results[logic].append(hist['as_reactant'] >= self.min_history['as_reactant'] or
-                                  hist['as_product'] >= self.min_history['as_product'])
+        def min_history():
+            if self.min_history is not None:
+                return hist is not None and (hist['as_reactant'] >= self.min_history['as_reactant'] or
+                                             hist['as_product'] >= self.min_history['as_product'])
+            return True
 
-        return all(results['and']) or any(results['or'])
+        local_dict = locals()
+        or_criteria = self.termination_logic.get('or')
+        and_criteria = self.termination_logic.get('and')
+
+        return (bool(or_criteria) and any(local_dict[criteria]() for criteria in or_criteria) or
+                bool(and_criteria) and all(local_dict[criteria]() for criteria in and_criteria))
 
     def enumerate_paths(self, path_format='json', sorting_metric='plausibility',
                         validate_paths=True, legacy_json=True, **kwargs):

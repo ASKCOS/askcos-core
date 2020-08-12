@@ -38,6 +38,7 @@ class TestMCTS(unittest.TestCase):
         """Test that the is_terminal method works."""
         options = {
             'max_ppg': 10,
+            'termination_logic': {'or': ['max_ppg']}
         }
         self.mcts.set_options(**options)
         self.assertTrue(self.mcts.is_terminal('C', 1))
@@ -48,6 +49,7 @@ class TestMCTS(unittest.TestCase):
         """Test that the is_terminal method works."""
         options = {
             'max_scscore': 2,
+            'termination_logic': {'or': ['max_scscore']}
         }
         self.mcts.set_options(**options)
         self.assertTrue(self.mcts.is_terminal('Brc1ccccc1'))
@@ -57,6 +59,7 @@ class TestMCTS(unittest.TestCase):
         """Test that the is_terminal method works."""
         options = {
             'max_elements': {'C': 2, 'N': 2},
+            'termination_logic': {'or': ['max_elements']}
         }
         self.mcts.set_options(**options)
         self.assertTrue(self.mcts.is_terminal('C'))
@@ -69,6 +72,7 @@ class TestMCTS(unittest.TestCase):
         """Test that the is_terminal method works."""
         options = {
             'min_history': {'as_reactant': 10, 'as_product': 10},
+            'termination_logic': {'or': ['min_history']}
         }
         self.mcts.set_options(**options)
         self.assertTrue(self.mcts.is_terminal('C', hist={'as_reactant': 12, 'as_product': 12}))
@@ -82,7 +86,7 @@ class TestMCTS(unittest.TestCase):
         options = {
             'max_ppg': 10,
             'min_history': {'as_reactant': 10, 'as_product': 10},
-            'termination_logic': {'max_ppg': 'and', 'min_history': 'and'}
+            'termination_logic': {'and': ['max_ppg', 'min_history']}
         }
         self.mcts.set_options(**options)
         self.assertTrue(self.mcts.is_terminal('C', ppg=1, hist={'as_reactant': 12, 'as_product': 12}))
@@ -95,7 +99,7 @@ class TestMCTS(unittest.TestCase):
         options = {
             'max_ppg': 10,
             'min_history': {'as_reactant': 10, 'as_product': 10},
-            'termination_logic': {'max_ppg': 'and', 'min_history': 'or'}
+            'termination_logic': {'and': ['max_ppg'], 'or': ['min_history']}
         }
         self.mcts.set_options(**options)
         self.assertTrue(self.mcts.is_terminal('C', ppg=1, hist={'as_reactant': 12, 'as_product': 12}))
@@ -109,7 +113,7 @@ class TestMCTS(unittest.TestCase):
             'max_ppg': 10,
             'max_elements': {'C': 2, 'N': 2},
             'min_history': {'as_reactant': 10, 'as_product': 10},
-            'termination_logic': {'max_ppg': 'and', 'max_elements': 'and', 'min_history': 'or'}
+            'termination_logic': {'and': ['max_ppg', 'max_elements'], 'or': ['min_history']}
         }
         self.mcts.set_options(**options)
         self.assertTrue(self.mcts.is_terminal('C', ppg=1, hist={'as_reactant': 12, 'as_product': 12}))
@@ -133,6 +137,10 @@ class TestMCTS(unittest.TestCase):
 
     def test_create_chemical_node(self):
         """Test that the create_chemical_node method works."""
+        options = {
+            'termination_logic': {'or': ['buyable']}
+        }
+        self.mcts.set_options(**options)
         self.mcts.create_chemical_node(self.target)
         self.assertIn(self.target, self.mcts.chemicals)
         self.assertIn(self.target, self.mcts.tree)

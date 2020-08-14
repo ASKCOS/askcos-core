@@ -86,12 +86,28 @@ class Pricer:
         canonical. If the DB connection does not exist, look up from 
         prices dictionary attribute, otherwise lookup from DB.
         If multiple entries exist in the DB, return the lowest price.
+
+        Args:
+            smiles (str): SMILES string to look up
+            source (list or str, optional): buyables sources to consider;
+                if ``None`` (default), include all sources, otherwise
+                must be single source or list of sources to consider;
+            alreadyCanonical (bool, optional): whether SMILES string is already
+                canonical; if ``False`` (default), SMILES will be canonicalized
+            isomericSmiles (bool, optional): whether to generate isomeric
+                SMILES string when performing canonicalization
         """
         if not alreadyCanonical:
             mol = Chem.MolFromSmiles(smiles)
             if not mol:
                 return 0.
             smiles = Chem.MolToSmiles(mol, isomericSmiles=isomericSmiles)
+
+        if source == []:
+            # If no sources are allowed, there is no need to perform lookup
+            # Empty list is checked explicitly here, since None means source
+            # will not be included in query, and '' is a valid source value
+            return 0.0
 
         if self.use_db:
             query = {'smiles': smiles}

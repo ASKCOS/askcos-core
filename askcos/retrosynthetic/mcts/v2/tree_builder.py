@@ -8,6 +8,7 @@ import numpy as np
 from rdkit import Chem
 from rdchiral.initialization import rdchiralReaction, rdchiralReactants
 
+from askcos.retrosynthetic.mcts.utils import nx_to_legacy_json
 from askcos.utilities.io.logger import MyLogger
 
 treebuilder_loc = 'mcts_tree_builder_v2'
@@ -720,7 +721,7 @@ class MCTS:
         elif path_format == 'json':
             paths = [nx.tree_data(path, self.target_uuid) for path in self.paths]
             if legacy_json:
-                paths = [translate_json(path) for path in paths]
+                paths = [nx_to_legacy_json(path) for path in paths]
         else:
             raise ValueError('Unrecognized format type {0}'.format(path_format))
 
@@ -825,38 +826,3 @@ def sort_paths(paths, metric):
     return paths
 
 
-def translate_json(path):
-    """
-    Convert json output from networkx to match output of old tree builder.
-
-    Input should be a deserialized python object, not a raw json string.
-    """
-    key_map = {
-        'smiles': 'smiles',
-        'id': 'id',
-        'as_reactant': 'as_reactant',
-        'as_product': 'as_product',
-        'ff_score': 'plausibility',
-        'purchase_price': 'ppg',
-        'template_score': 'template_score',
-        'tforms': 'tforms',
-        'num_examples': 'num_examples',
-        'necessary_reagent': 'necessary_reagent',
-    }
-
-    output = {}
-    for key, value in path.items():
-        if key in key_map:
-            output[key_map[key]] = value
-        elif key == 'type':
-            if value == 'chemical':
-                output['is_chemical'] = True
-            elif value == 'reaction':
-                output['is_reaction'] = True
-        elif key == 'children':
-            output['children'] = [translate_json(c) for c in value]
-
-    if 'children' not in output:
-        output['children'] = []
-
-    return output

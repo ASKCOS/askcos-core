@@ -1,4 +1,4 @@
-ARG BASE_VERSION=2019.03.4-gh2855-py35
+ARG BASE_VERSION=2020.03.4-gh2855-py37
 ARG DATA_VERSION=dev
 
 FROM registry.gitlab.com/mlpds_mit/askcos/askcos-data:$DATA_VERSION as data

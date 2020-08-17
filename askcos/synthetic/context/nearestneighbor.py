@@ -7,7 +7,7 @@ import numpy as np
 import random
 from collections import deque
 # from sklearn.neighbors import NearestNeighbors as NN
-from sklearn.externals import joblib
+import joblib
 import askcos.utilities.strings as strings
 import askcos.utilities.fingerprinting as fp
 from askcos.utilities.io.logger import MyLogger

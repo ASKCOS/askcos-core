@@ -161,10 +161,10 @@ class SCScorePrecursorPrioritizer(Prioritizer):
         if not isinstance(retroProduct, str):
             scores = []
             for smiles in retroProduct.smiles_list:
-                scores.append(self.get_score_from_smiles(smiles))
+                scores.append(self.get_score_from_smiles(smiles, **kwargs))
             return -self.merge_scores(scores, mode=mode)
         else:
-            return -self.get_score_from_smiles(retroProduct)
+            return -self.get_score_from_smiles(retroProduct, **kwargs)
         if not retroProduct:
             return -inf
 

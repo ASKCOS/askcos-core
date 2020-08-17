@@ -5,6 +5,7 @@ hdbscan==0.8.23
 keras==2.2.4
 Markdown==3.2.2
 matplotlib==3.3.0
+networkx==2.4
 numpy==1.19.0
 pandas==1.0.5
 pillow==7.2.0

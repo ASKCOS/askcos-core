@@ -79,13 +79,23 @@ class Pricer:
         else:
             MyLogger.print_and_log('Buyables file does not exist: {}'.format(file_name), pricer_loc)
 
-    def lookup_smiles(self, smiles, alreadyCanonical=False, isomericSmiles=True):
+    def lookup_smiles(self, smiles, source=None, alreadyCanonical=False, isomericSmiles=True):
         """
         Looks up a price by SMILES. Canonicalize smiles string unless 
         the user specifies that the smiles string is definitely already 
         canonical. If the DB connection does not exist, look up from 
         prices dictionary attribute, otherwise lookup from DB.
         If multiple entries exist in the DB, return the lowest price.
+
+        Args:
+            smiles (str): SMILES string to look up
+            source (list or str, optional): buyables sources to consider;
+                if ``None`` (default), include all sources, otherwise
+                must be single source or list of sources to consider;
+            alreadyCanonical (bool, optional): whether SMILES string is already
+                canonical; if ``False`` (default), SMILES will be canonicalized
+            isomericSmiles (bool, optional): whether to generate isomeric
+                SMILES string when performing canonicalization
         """
         if not alreadyCanonical:
             mol = Chem.MolFromSmiles(smiles)
@@ -93,11 +103,22 @@ class Pricer:
                 return 0.
             smiles = Chem.MolToSmiles(mol, isomericSmiles=isomericSmiles)
 
+        if source == []:
+            # If no sources are allowed, there is no need to perform lookup
+            # Empty list is checked explicitly here, since None means source
+            # will not be included in query, and '' is a valid source value
+            return 0.0
+
         if self.use_db:
-            cursor = self.BUYABLES_DB.find({
-                'smiles': smiles,
-                'source': {'$ne': 'LN'}
-            })
+            query = {'smiles': smiles}
+
+            if source is not None:
+                if isinstance(source, list):
+                    query['source'] = {'$in': source}
+                else:
+                    query['source'] = source
+
+            cursor = self.BUYABLES_DB.find(query)
             return min([doc['ppg'] for doc in cursor], default=0.0)
         else:
             return self.prices[smiles]

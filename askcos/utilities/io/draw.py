@@ -13,6 +13,8 @@ import os
 import re
 import io
 
+# Disable cairo drawing backend for RDKit
+delattr(Draw.rdMolDraw2D, 'MolDraw2DCairo')
 
 
 def get_scaled_drawer(mol):

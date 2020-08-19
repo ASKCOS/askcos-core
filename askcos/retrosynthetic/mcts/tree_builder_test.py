@@ -81,6 +81,7 @@ class TestMCTSTreeBuilder(unittest.TestCase):
             expansion_time=30,
             max_cum_template_prob=0.995,
             template_count=100,
+            termination_logic={'or': ['buyable']},
             soft_reset=True,  # do not kill workers since there are more tests
             soft_stop=True,  # do not kill workers since there are more tests
         )
@@ -145,6 +146,7 @@ class TestMCTSTreeBuilder(unittest.TestCase):
             expansion_time=30,
             max_cum_template_prob=0.995,
             template_count=100,
+            termination_logic={'or': ['buyable']},
             soft_reset=True,  # do not kill workers since there are more tests
             soft_stop=True,  # do not kill workers since there are more tests
         )
@@ -208,6 +210,7 @@ class TestMCTSTreeBuilder(unittest.TestCase):
             expansion_time=30,
             max_cum_template_prob=0.995,
             template_count=100,
+            termination_logic={'or': ['buyable']},
             soft_reset=True,  # do not kill workers since there are more tests
             soft_stop=True,  # do not kill workers since there are more tests
         )

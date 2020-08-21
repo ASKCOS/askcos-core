@@ -8,6 +8,10 @@ import numpy as np
 from rdkit import Chem
 from rdchiral.initialization import rdchiralReaction, rdchiralReactants
 
+from askcos.utilities.io.logger import MyLogger
+
+treebuilder_loc = 'mcts_tree_builder_v2'
+
 
 class MCTS:
     """Monte Carlo Tree Search"""
@@ -216,10 +220,10 @@ class MCTS:
         """
         self.set_options(**kwargs)
 
-        print('Initializing tree...')
+        MyLogger.print_and_log('Initializing tree...', treebuilder_loc)
         self._initialize(target)
 
-        print('Starting tree expansion...')
+        MyLogger.print_and_log('Starting tree expansion...', treebuilder_loc)
         start_time = time.time()
         elapsed_time = time.time() - start_time
 
@@ -230,16 +234,16 @@ class MCTS:
 
             self.iterations += 1
             if self.iterations % 100 == 0:
-                print('Iteration {0} ({1:.2f}s): |C| = {2} |R| = {3}'.format(self.iterations, elapsed_time, len(self.chemicals), len(self.reactions)))
+                MyLogger.print_and_log('Iteration {0} ({1:.2f}s): |C| = {2} |R| = {3}'.format(self.iterations, elapsed_time, len(self.chemicals), len(self.reactions)), treebuilder_loc)
 
             if not self.time_to_solve and self.tree.nodes[self.target]['solved']:
                 self.time_to_solve = elapsed_time
-                print('Found first pathway after {:.2f} seconds.'.format(elapsed_time))
+                MyLogger.print_and_log('Found first pathway after {:.2f} seconds.'.format(elapsed_time), treebuilder_loc)
                 if self.return_first:
-                    print('Stopping expansion to return first pathway.')
+                    MyLogger.print_and_log('Stopping expansion to return first pathway.', treebuilder_loc)
                     break
 
-        print('Tree expansion complete.')
+        MyLogger.print_and_log('Tree expansion complete.', treebuilder_loc)
         self.print_stats()
 
     def print_stats(self):
@@ -256,7 +260,7 @@ class MCTS:
         if num_nodes > 0:
             info += 'Average in degree: {0:.4f}\n'.format(sum(d for _, d in self.tree.in_degree()) / num_nodes)
             info += 'Average out degree: {0:.4f}'.format(sum(d for _, d in self.tree.out_degree()) / num_nodes)
-        print(info)
+        MyLogger.print_and_log(info, treebuilder_loc)
 
     def clear(self):
         """
@@ -396,7 +400,6 @@ class MCTS:
             if not options:
                 # There are no valid options from this chemical node, we need to backtrack
                 invalid_options.add(leaf)
-                print(invalid_options)
                 del chem_path[-1]
                 del rxn_path[-1]
                 continue
@@ -708,7 +711,7 @@ class MCTS:
 
         self.paths = sort_paths(paths, sorting_metric)  # converts to a list
 
-        print('Found {0} paths to buyable chemicals.'.format(len(self.paths)))
+        MyLogger.print_and_log('Found {0} paths to buyable chemicals.'.format(len(self.paths)), treebuilder_loc)
 
         if path_format == 'graph':
             paths = self.paths

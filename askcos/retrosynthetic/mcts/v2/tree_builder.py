@@ -49,7 +49,6 @@ class MCTS:
             fast_filter = None
 
         self.retro_transformer = retro_transformer or self.load_retro_transformer(
-            use_db=use_db,
             template_set=template_set,
             template_prioritizer=template_prioritizer,
             precursor_prioritizer=precursor_prioritizer,
@@ -185,18 +184,18 @@ class MCTS:
         return scscorer
 
     @staticmethod
-    def load_retro_transformer(use_db, template_set='reaxys', template_prioritizer='reaxys',
+    def load_retro_transformer(template_set='reaxys', template_prioritizer='reaxys',
                                precursor_prioritizer='relevanceheuristic', fast_filter='default'):
         """
         Loads retro transformer model.
         """
         from askcos.retrosynthetic.transformer import RetroTransformer
         retro_transformer = RetroTransformer(
-            use_db=use_db,
             template_set=template_set,
             template_prioritizer=template_prioritizer,
             precursor_prioritizer=precursor_prioritizer,
             fast_filter=fast_filter,
+            scscorer=None,
         )
         retro_transformer.load()
         return retro_transformer
@@ -731,13 +730,13 @@ class MCTS:
         for rxn in self.reactions:
             rxn_data = self.tree.nodes[rxn]
             template_ids = rxn_data['templates']
-            if self.retro_transformer.load_all or not self.retro_transformer.use_db:
-                templates = [self.retro_transformer.templates[tid] for tid in template_ids]
-            else:
-                templates = list(self.retro_transformer.TEMPLATE_DB.find({
+            if hasattr(self.retro_transformer, 'template_db'):
+                templates = list(self.retro_transformer.template_db.find({
                     'index': {'$in': template_ids},
                     'template_set': self.template_set,
                 }))
+            else:
+                templates = [self.retro_transformer.templates[tid] for tid in template_ids]
             rxn_data['tforms'] = [str(t.get('_id', -1)) for t in templates]
             rxn_data['num_examples'] = int(sum([t.get('count', 1) for t in templates]))
             rxn_data['necessary_reagent'] = templates[0].get('necessary_reagent', '')

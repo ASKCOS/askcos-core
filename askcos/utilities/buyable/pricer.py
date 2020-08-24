@@ -4,6 +4,7 @@ import os
 from collections import defaultdict
 
 import rdkit.Chem as Chem
+import pandas as pd
 from pymongo import MongoClient, errors
 
 import askcos.global_config as gc
@@ -22,7 +23,7 @@ class Pricer:
 
         self.BUYABLES_DB = BUYABLES_DB
         self.use_db = use_db
-        self.prices = defaultdict(float)  # default 0 ppg means not buyable
+        self.prices = None
 
     def load(self, file_name=gc.BUYABLES['file_name']):
         """
@@ -60,21 +61,19 @@ class Pricer:
         """
         Write prices to a local file
         """
-        prices = [{'smiles': s, 'ppg': p} for s, p in self.prices.items()]
-
-        with gzip.open(file_path, 'wt', encoding='utf-8') as f:
-            json.dump(prices, f)
+        self.prices.to_json(file_path, orient='records', compression='gzip')
 
     def load_from_file(self, file_name):
         """
         Load buyables information from local file
         """
         if os.path.isfile(file_name):
-            with gzip.open(file_name, 'rt', encoding='utf-8') as f:
-                prices = json.load(f)
-
-            self.prices.update({p['smiles']: p['ppg'] for p in prices if p.get('smiles')})
-
+            self.prices = pd.read_json(
+                file_name,
+                orient='records',
+                dtype={'smiles': 'object', 'source': 'object', 'ppg': 'float'},
+                compression='gzip',
+            )
             MyLogger.print_and_log('Loaded prices from flat file', pricer_loc)
         else:
             MyLogger.print_and_log('Buyables file does not exist: {}'.format(file_name), pricer_loc)
@@ -120,8 +119,19 @@ class Pricer:
 
             cursor = self.BUYABLES_DB.find(query)
             return min([doc['ppg'] for doc in cursor], default=0.0)
+        elif self.prices is not None:
+            query = self.prices['smiles'] == smiles
+
+            if source is not None:
+                if isinstance(source, list):
+                    query = query & (self.prices['source'].isin(source))
+                else:
+                    query = query & (self.prices['source'] == source)
+
+            results = self.prices.loc[query]
+            return min(results['ppg'], default=0.0)
         else:
-            return self.prices[smiles]
+            return 0.0
 
 
 if __name__ == '__main__':

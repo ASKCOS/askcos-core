@@ -607,7 +607,7 @@ class MCTS:
         self.tree.add_node(
             smiles,
             est_value=0.,       # score for how feasible a route is, based on whether its precursors are terminal
-            ff_score=ff_score,
+            plausibility=ff_score,
             solved=False,             # whether a path to terminal leaves has been found from this node
             template_score=template_score,
             templates=[template],

@@ -202,7 +202,7 @@ class TestMCTS(unittest.TestCase):
         self.assertIn(c1, self.mcts.chemicals)
         node_data = self.mcts.tree.nodes[c1]
         self.assertIsInstance(node_data['templates'], dict)
-        self.assertEqual(node_data['purchase_price'], 12)
+        self.assertEqual(node_data['purchase_price'], 1)
 
         self.assertIn(c2, self.mcts.chemicals)
         node_data = self.mcts.tree.nodes[c2]

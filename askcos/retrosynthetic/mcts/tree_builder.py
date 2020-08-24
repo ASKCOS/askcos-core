@@ -1278,6 +1278,34 @@ class MCTS:
                     results[chemical.smiles].append(reaction)
         return dict(results)
 
+    def get_graph(self):
+        """
+        Convert tree builder results to networkx graph.
+        """
+        graph = chem_to_nx_graph(list(self.Chemicals.values()))
+        self.retrieve_template_data(graph)
+
+        # Remove unnecessary attributes
+        attr_to_keep = {
+            'smiles',
+            'type',
+            'purchase_price',
+            'as_reactant',
+            'as_product',
+            'terminal',
+            'plausibility',
+            'template_score',
+            'tforms',
+            'num_examples',
+            'necessary_reagent',
+        }
+        for node, node_data in graph.nodes.items():
+            attr_to_remove = [attr for attr in node_data if attr not in attr_to_keep]
+            for attr in attr_to_remove:
+                del node_data[attr]
+
+        return graph
+
     def enumerate_paths(self, path_format='json', validate_paths=True, **kwargs):
         """
         Return list of paths to buyables starting from the target node.
@@ -1289,10 +1317,7 @@ class MCTS:
         Returns:
             list of paths in specified format
         """
-        self.tree = chem_to_nx_graph(list(self.Chemicals.values()))
-
-        # Resolve template data before doing any node duplication
-        self.retrieve_template_data()
+        self.tree = self.get_graph()
 
         self.paths, self.target_uuid = nx_graph_to_paths(
             self.tree,
@@ -1314,11 +1339,11 @@ class MCTS:
 
         return paths
 
-    def retrieve_template_data(self):
+    def retrieve_template_data(self, graph):
         """
         Retrieve template data for all reaction nodes using template ids.
         """
-        for node, node_data in self.tree.nodes.items():
+        for node, node_data in graph.nodes.items():
             if node_data['type'] == 'chemical':
                 continue
 

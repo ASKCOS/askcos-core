@@ -147,6 +147,34 @@ class MCTS:
             data.update(self.tree.nodes[smiles])
         return branching
 
+    def get_graph(self):
+        """
+        Return cleaned version of original graph.
+        """
+        self.retrieve_template_data()
+        graph = self.tree.copy(as_view=False)
+
+        # Remove unnecessary attributes
+        attr_to_keep = {
+            'smiles',
+            'type',
+            'purchase_price',
+            'as_reactant',
+            'as_product',
+            'terminal',
+            'plausibility',
+            'template_score',
+            'tforms',
+            'num_examples',
+            'necessary_reagent',
+        }
+        for node, node_data in graph.nodes.items():
+            attr_to_remove = [attr for attr in node_data if attr not in attr_to_keep]
+            for attr in attr_to_remove:
+                del node_data[attr]
+
+        return graph
+
     def get_union_of_paths(self):
         """
         Returns the union of self.paths as a single tree.

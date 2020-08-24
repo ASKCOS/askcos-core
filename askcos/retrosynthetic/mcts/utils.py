@@ -2,26 +2,39 @@
 Utilities for processing tree builder results.
 """
 
+import itertools
+
 import networkx as nx
+import numpy as np
 
 
-def nx_to_legacy_json(path):
+def nx_paths_to_json(paths, root_uuid):
     """
-    Convert json output from networkx to match output of old tree builder.
-
-    Input should be a deserialized python object, not a raw json string.
+    Convert list of paths from networkx graphs to json.
     """
+    return [clean_json(nx.tree_data(path, root_uuid)) for path in paths]
+
+
+def clean_json(path):
+    """
+    Clean up json representation of a pathway. Accepts paths from either
+    tree builder version.
+    """
+    # Only fields in this dictionary are kept
     key_map = {
         'smiles': 'smiles',
         'id': 'id',
         'as_reactant': 'as_reactant',
         'as_product': 'as_product',
-        'ff_score': 'plausibility',
+        'plausibility': 'plausibility',
         'purchase_price': 'ppg',
         'template_score': 'template_score',
+        'terminal': 'terminal',
         'tforms': 'tforms',
         'num_examples': 'num_examples',
         'necessary_reagent': 'necessary_reagent',
+        'is_chemical': 'is_chemical',
+        'is_reaction': 'is_reaction'
     }
 
     output = {}
@@ -34,7 +47,7 @@ def nx_to_legacy_json(path):
             elif value == 'reaction':
                 output['is_reaction'] = True
         elif key == 'children':
-            output['children'] = [nx_to_legacy_json(c) for c in value]
+            output['children'] = [clean_json(c) for c in value]
 
     if 'children' not in output:
         output['children'] = []
@@ -79,3 +92,120 @@ def chem_to_nx_graph(chemicals):
                     graph.add_edge(rxn_smiles, precursor)
 
     return graph
+
+
+def nx_graph_to_paths(tree, root, max_depth=None, max_trees=None,
+                      sorting_metric='plausibility', validate_paths=True):
+    """
+    Return list of paths to buyables starting from the target node.
+
+    Args:
+        path_format (str): pathway output format, supports 'graph' or 'json'
+        sorting_metric (str): how pathways are sorted, supports 'plausibility',
+            'number_of_starting_materials', 'number_of_reactions'
+        validate_paths (bool): require all leaves to meet terminal criteria
+        legacy_json (bool): convert to json format used by old tree builder
+
+    Returns:
+        list of paths in specified format
+    """
+    root_uuid = nx.utils.generate_unique_node()
+
+    paths = get_paths(
+        tree,
+        root=root,
+        root_uuid=root_uuid,
+        max_depth=max_depth,
+        max_trees=max_trees,
+        validate_paths=validate_paths,
+    )  # returns generator
+
+    paths = sort_paths(paths, sorting_metric)  # converts to a list
+
+    return paths, root_uuid
+
+
+def get_paths(tree, root, root_uuid, max_depth=None, max_trees=None, validate_paths=True):
+    """
+    Generate all paths from the root node as `nx.DiGraph` objects.
+
+    All node attributes are copied to the output paths.
+
+    Args:
+        validate_paths (bool): require all leaves to meet terminal criteria
+
+    Returns:
+        generator of paths
+    """
+    import itertools
+
+    def get_chem_paths(_node, _uuid, chem_path):
+        """
+        Return generator of paths with current node as the root.
+        """
+        if tree.out_degree(_node) == 0 or max_depth is not None and len(chem_path) >= max_depth:
+            sub_path = nx.DiGraph()
+            sub_path.add_node(_uuid, smiles=_node, **tree.nodes[_node])
+            yield sub_path
+        else:
+            for rxn in tree.successors(_node):
+                rxn_uuid = nx.utils.generate_unique_node()
+                for sub_path in get_rxn_paths(rxn, rxn_uuid, chem_path + [_node]):
+                    sub_path.add_node(_uuid, smiles=_node, **tree.nodes[_node])
+                    sub_path.add_edge(_uuid, rxn_uuid)
+                    yield sub_path
+
+    def get_rxn_paths(_node, _uuid, chem_path):
+        """
+        Return generator of paths with current node as root.
+        """
+        precursors = list(tree.successors(_node))
+        if set(precursors) & set(chem_path):
+            # Adding this reaction would create a cycle
+            return
+        c_uuid = {c: nx.utils.generate_unique_node() for c in precursors}
+        for path_combo in itertools.product(*(get_chem_paths(c, c_uuid[c], chem_path) for c in precursors)):
+            sub_path = nx.union_all(path_combo)
+            sub_path.add_node(_uuid, smiles=_node, **tree.nodes[_node])
+            for c in tree.successors(_node):
+                sub_path.add_edge(_uuid, c_uuid[c])
+            yield sub_path
+
+    def validate_path(_path):
+        """Return true if all leaves are terminal."""
+        leaves = (v for v, d in _path.out_degree() if d == 0)
+        return all(_path.nodes[v]['terminal'] for v in leaves)
+
+    num_paths = 0
+    for path in get_chem_paths(root, root_uuid, []):
+        if max_trees is not None and num_paths >= max_trees:
+            break
+        if validate_paths and validate_path(path):
+            num_paths += 1
+            yield path
+
+
+def sort_paths(paths, metric):
+    """
+    Sort paths by some metric.
+    """
+
+    def number_of_starting_materials(tree):
+        return len([v for v, d in tree.out_degree() if d == 0])
+
+    def number_of_reactions(tree):
+        return len([v for v in nx.dag_longest_path(tree) if tree.nodes[v]['type'] == 'reaction'])
+
+    def overall_plausibility(tree):
+        return np.prod([d['plausibility'] for v, d in tree.nodes(data=True) if d['type'] == 'reaction'])
+
+    if metric == 'plausibility':
+        paths = sorted(paths, key=lambda x: overall_plausibility(x), reverse=True)
+    elif metric == 'number_of_starting_materials':
+        paths = sorted(paths, key=lambda x: number_of_starting_materials(x))
+    elif metric == 'number_of_reactions':
+        paths = sorted(paths, key=lambda x: number_of_reactions(x))
+    else:
+        raise ValueError('Need something to sort by! Invalid option provided: {}'.format(metric))
+
+    return paths

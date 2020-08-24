@@ -8,7 +8,7 @@ import numpy as np
 from rdkit import Chem
 from rdchiral.initialization import rdchiralReaction, rdchiralReactants
 
-from askcos.retrosynthetic.mcts.utils import nx_to_legacy_json
+from askcos.retrosynthetic.mcts.utils import nx_graph_to_paths, nx_paths_to_json
 from askcos.utilities.io.logger import MyLogger
 
 treebuilder_loc = 'mcts_tree_builder_v2'
@@ -693,7 +693,7 @@ class MCTS:
                 bool(and_criteria) and all(local_dict[criteria]() for criteria in and_criteria))
 
     def enumerate_paths(self, path_format='json', sorting_metric='plausibility',
-                        validate_paths=True, legacy_json=True, **kwargs):
+                        validate_paths=True, **kwargs):
         """
         Return list of paths to buyables starting from the target node.
 
@@ -702,7 +702,6 @@ class MCTS:
             sorting_metric (str): how pathways are sorted, supports 'plausibility',
                 'number_of_starting_materials', 'number_of_reactions'
             validate_paths (bool): require all leaves to meet terminal criteria
-            legacy_json (bool): convert to json format used by old tree builder
 
         Returns:
             list of paths in specified format
@@ -710,18 +709,21 @@ class MCTS:
         # Resolve template data before doing any node duplication
         self.retrieve_template_data()
 
-        paths = self.get_paths(validate_paths=validate_paths)  # returns generator
-
-        self.paths = sort_paths(paths, sorting_metric)  # converts to a list
+        self.paths, self.target_uuid = nx_graph_to_paths(
+            self.tree,
+            self.target,
+            max_depth=self.max_depth,
+            max_trees=self.max_trees,
+            sorting_metric=sorting_metric,
+            validate_paths=validate_paths,
+        )
 
         MyLogger.print_and_log('Found {0} paths to buyable chemicals.'.format(len(self.paths)), treebuilder_loc)
 
         if path_format == 'graph':
             paths = self.paths
         elif path_format == 'json':
-            paths = [nx.tree_data(path, self.target_uuid) for path in self.paths]
-            if legacy_json:
-                paths = [nx_to_legacy_json(path) for path in paths]
+            paths = nx_paths_to_json(self.paths, self.target_uuid)
         else:
             raise ValueError('Unrecognized format type {0}'.format(path_format))
 
@@ -744,85 +746,3 @@ class MCTS:
             rxn_data['tforms'] = [str(t.get('_id', -1)) for t in templates]
             rxn_data['num_examples'] = int(sum([t.get('count', 1) for t in templates]))
             rxn_data['necessary_reagent'] = templates[0].get('necessary_reagent', '')
-
-    def get_paths(self, validate_paths=True):
-        """
-        Generate all paths from the root node as `nx.DiGraph` objects.
-
-        All node attributes are copied to the output paths.
-
-        Args:
-            validate_paths (bool): require all leaves to meet terminal criteria
-
-        Returns:
-            generator of paths
-        """
-        def get_chem_paths(_node, _uuid, _depth=0):
-            """
-            Return generator of paths with current node as the root.
-            """
-            if self.tree.out_degree(_node) == 0 or self.max_depth is not None and _depth >= self.max_depth:
-                sub_path = nx.DiGraph()
-                sub_path.add_node(_uuid, smiles=_node, **self.tree.nodes[_node])
-                yield sub_path
-            else:
-                for rxn in self.tree.successors(_node):
-                    rxn_uuid = nx.utils.generate_unique_node()
-                    for sub_path in get_rxn_paths(rxn, rxn_uuid, _depth + 1):
-                        sub_path.add_node(_uuid, smiles=_node, **self.tree.nodes[_node])
-                        sub_path.add_edge(_uuid, rxn_uuid)
-                        yield sub_path
-
-        def get_rxn_paths(_node, _uuid, _depth=0):
-            """
-            Return generator of paths with current node as root.
-            """
-            c_uuid = {c: nx.utils.generate_unique_node() for c in self.tree.successors(_node)}
-            for path_combo in itertools.product(*(get_chem_paths(c, c_uuid[c], _depth) for c in self.tree.successors(_node))):
-                sub_path = nx.union_all(path_combo)
-                sub_path.add_node(_uuid, smiles=_node, **self.tree.nodes[_node])
-                for c in self.tree.successors(_node):
-                    sub_path.add_edge(_uuid, c_uuid[c])
-                yield sub_path
-
-        def validate_path(_path):
-            """Return true if all leaves are terminal."""
-            leaves = (v for v, d in _path.out_degree() if d == 0)
-            return all(_path.nodes[v]['terminal'] for v in leaves)
-
-        self.target_uuid = nx.utils.generate_unique_node()
-        num_paths = 0
-        for path in get_chem_paths(self.target, self.target_uuid):
-            if self.max_trees is not None and num_paths >= self.max_trees:
-                break
-            if validate_paths and validate_path(path):
-                num_paths += 1
-                yield path
-
-
-def sort_paths(paths, metric):
-    """
-    Sort paths by some metric.
-    """
-
-    def number_of_starting_materials(tree):
-        return len([v for v, d in tree.out_degree() if d == 0])
-
-    def number_of_reactions(tree):
-        return len([v for v in nx.dag_longest_path(tree) if tree.nodes[v]['type'] == 'reaction'])
-
-    def overall_plausibility(tree):
-        return np.prod([d['ff_score'] for v, d in tree.nodes(data=True) if d['type'] == 'reaction'])
-
-    if metric == 'plausibility':
-        paths = sorted(paths, key=lambda x: overall_plausibility(x), reverse=True)
-    elif metric == 'number_of_starting_materials':
-        paths = sorted(paths, key=lambda x: number_of_starting_materials(x))
-    elif metric == 'number_of_reactions':
-        paths = sorted(paths, key=lambda x: number_of_reactions(x))
-    else:
-        raise ValueError('Need something to sort by! Invalid option provided: {}'.format(metric))
-
-    return paths
-
-

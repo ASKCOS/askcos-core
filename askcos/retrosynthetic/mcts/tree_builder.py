@@ -6,6 +6,7 @@ import time
 from collections import defaultdict
 from multiprocessing import Process, Manager, Queue
 
+import networkx as nx
 import numpy as np
 import rdkit.Chem as Chem
 from pymongo import MongoClient
@@ -20,6 +21,8 @@ from askcos.utilities.historian.chemicals import ChemHistorian
 from askcos.prioritization.precursors.scscore import SCScorePrecursorPrioritizer
 from askcos.prioritization.templates.relevance import RelevanceTemplatePrioritizer
 from askcos.synthetic.evaluation.fast_filter import FastFilterScorer
+
+from .utils import chem_to_nx_graph, nx_graph_to_paths, nx_paths_to_json
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
@@ -1268,14 +1271,60 @@ class MCTS:
     def return_chemical_results(self):
         results = defaultdict(list)
         for chemical in self.Chemicals.values():
-            if not chemical.template_idx_results:
-                results[chemical.smiles]
             for cta in chemical.template_idx_results.values():
                 for res in cta.reactions.values():
                     reaction = vars(res)
                     reaction['pathway_count'] = int(reaction['pathway_count'])
                     results[chemical.smiles].append(reaction)
         return dict(results)
+
+    def enumerate_paths(self, path_format='json', validate_paths=True, **kwargs):
+        """
+        Return list of paths to buyables starting from the target node.
+
+        Args:
+            path_format (str): pathway output format, supports 'graph' or 'json'
+            validate_paths (bool): require all leaves to meet terminal criteria
+
+        Returns:
+            list of paths in specified format
+        """
+        self.tree = chem_to_nx_graph(list(self.Chemicals.values()))
+
+        # Resolve template data before doing any node duplication
+        self.retrieve_template_data()
+
+        self.paths, self.target_uuid = nx_graph_to_paths(
+            self.tree,
+            self.smiles,
+            max_depth=self.max_depth,
+            max_trees=self.max_trees,
+            sorting_metric=self.sort_trees_by,
+            validate_paths=validate_paths,
+        )
+
+        MyLogger.print_and_log('Found {0} paths to buyable chemicals.'.format(len(self.paths)), treebuilder_loc)
+
+        if path_format == 'graph':
+            paths = self.paths
+        elif path_format == 'json':
+            paths = nx_paths_to_json(self.paths, self.target_uuid)
+        else:
+            raise ValueError('Unrecognized format type {0}'.format(path_format))
+
+        return paths
+
+    def retrieve_template_data(self):
+        """
+        Retrieve template data for all reaction nodes using template ids.
+        """
+        for node, node_data in self.tree.nodes.items():
+            if node_data['type'] == 'chemical':
+                continue
+
+            template_ids = node_data['tforms']
+            info = self.tid_list_to_info_dict(template_ids)
+            node_data.update(info)
 
 
 if __name__ == '__main__':

@@ -1182,7 +1182,7 @@ class MCTS:
         self.max_scscore = max_scscore
         self.max_elements = max_elements
         self.min_history = min_history
-        self.termination_logic = termination_logic or {}
+        self.termination_logic = termination_logic if termination_logic is not None else {'and': ['buyable']}
         self.buyables_source = buyables_source
 
         self.sort_trees_by = sort_trees_by

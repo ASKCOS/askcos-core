@@ -34,7 +34,11 @@ def clean_json(path):
         'num_examples': 'num_examples',
         'necessary_reagent': 'necessary_reagent',
         'is_chemical': 'is_chemical',
-        'is_reaction': 'is_reaction'
+        'is_reaction': 'is_reaction',
+        'precursor_smiles': 'precursor_smiles',
+        'rms_molwt': 'rms_molwt',
+        'num_rings': 'num_rings',
+        'scscore': 'scscore',
     }
 
     output = {}

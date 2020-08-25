@@ -15,6 +15,7 @@ import askcos.global_config as gc
 from askcos.retrosynthetic.mcts.nodes import Chemical, Reaction, ChemicalTemplateApplication
 from askcos.retrosynthetic.transformer import RetroTransformer
 from askcos.utilities.buyable.pricer import Pricer
+from askcos.utilities.descriptors import rms_molecular_weight, number_of_rings
 from askcos.utilities.formats import chem_dict, rxn_dict
 from askcos.utilities.io.logger import MyLogger
 from askcos.utilities.historian.chemicals import ChemHistorian
@@ -1283,7 +1284,7 @@ class MCTS:
         Convert tree builder results to networkx graph.
         """
         graph = chem_to_nx_graph(list(self.Chemicals.values()))
-        self.retrieve_template_data(graph)
+        self.update_reaction_data(graph)
 
         # Remove unnecessary attributes
         attr_to_keep = {
@@ -1298,6 +1299,10 @@ class MCTS:
             'tforms',
             'num_examples',
             'necessary_reagent',
+            'precursor_smiles',
+            'rms_molwt',
+            'num_rings',
+            'scscore',
         }
         for node, node_data in graph.nodes.items():
             attr_to_remove = [attr for attr in node_data if attr not in attr_to_keep]
@@ -1339,9 +1344,17 @@ class MCTS:
 
         return paths
 
-    def retrieve_template_data(self, graph):
+    def update_reaction_data(self, graph):
         """
-        Retrieve template data for all reaction nodes using template ids.
+        Update metadata for all reaction nodes.
+
+        Adds the following fields:
+            * tforms
+            * num_examples
+            * necessary_reagent
+            * precursor_smiles
+            * num_rings
+            * scscore
         """
         for node, node_data in graph.nodes.items():
             if node_data['type'] == 'chemical':
@@ -1350,6 +1363,12 @@ class MCTS:
             template_ids = node_data['tforms']
             info = self.tid_list_to_info_dict(template_ids)
             node_data.update(info)
+
+            precursor_smiles = node.split('>>')[0]
+            node_data['precursor_smiles'] = precursor_smiles
+            node_data['rms_molwt'] = rms_molecular_weight(precursor_smiles)
+            node_data['num_rings'] = number_of_rings(precursor_smiles)
+            node_data['scscore'] = self.scscorer.get_score_from_smiles(precursor_smiles, noprice=True)
 
 
 if __name__ == '__main__':

@@ -9,6 +9,7 @@ from rdkit import Chem
 from rdchiral.initialization import rdchiralReaction, rdchiralReactants
 
 from askcos.retrosynthetic.mcts.utils import nx_graph_to_paths, nx_paths_to_json
+from askcos.utilities.descriptors import rms_molecular_weight, number_of_rings
 from askcos.utilities.io.logger import MyLogger
 
 treebuilder_loc = 'mcts_tree_builder_v2'
@@ -151,7 +152,7 @@ class MCTS:
         """
         Return cleaned version of original graph.
         """
-        self.retrieve_template_data()
+        self.update_reaction_data()
         graph = self.tree.copy(as_view=False)
 
         # Remove unnecessary attributes
@@ -167,6 +168,10 @@ class MCTS:
             'tforms',
             'num_examples',
             'necessary_reagent',
+            'precursor_smiles',
+            'rms_molwt',
+            'num_rings',
+            'scscore',
         }
         for node, node_data in graph.nodes.items():
             attr_to_remove = [attr for attr in node_data if attr not in attr_to_keep]
@@ -729,7 +734,7 @@ class MCTS:
             list of paths in specified format
         """
         # Resolve template data before doing any node duplication
-        self.retrieve_template_data()
+        self.update_reaction_data()
 
         self.paths, self.target_uuid = nx_graph_to_paths(
             self.tree,
@@ -751,9 +756,17 @@ class MCTS:
 
         return paths
 
-    def retrieve_template_data(self):
+    def update_reaction_data(self):
         """
-        Retrieve template data for all reaction nodes using template ids.
+        Update metadata for all reaction nodes.
+
+        Adds the following fields:
+            * tforms
+            * num_examples
+            * necessary_reagent
+            * precursor_smiles
+            * num_rings
+            * scscore
         """
         for rxn in self.reactions:
             rxn_data = self.tree.nodes[rxn]
@@ -768,3 +781,9 @@ class MCTS:
             rxn_data['tforms'] = [str(t.get('_id', -1)) for t in templates]
             rxn_data['num_examples'] = int(sum([t.get('count', 1) for t in templates]))
             rxn_data['necessary_reagent'] = templates[0].get('necessary_reagent', '')
+
+            precursor_smiles = rxn.split('>>')[0]
+            rxn_data['precursor_smiles'] = precursor_smiles
+            rxn_data['rms_molwt'] = rms_molecular_weight(precursor_smiles)
+            rxn_data['num_rings'] = number_of_rings(precursor_smiles)
+            rxn_data['scscore'] = self.scscorer.get_score_from_smiles(precursor_smiles, noprice=True)

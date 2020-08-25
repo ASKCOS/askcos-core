@@ -771,16 +771,8 @@ class MCTS:
         for rxn in self.reactions:
             rxn_data = self.tree.nodes[rxn]
             template_ids = rxn_data['templates']
-            if hasattr(self.retro_transformer, 'template_db'):
-                templates = list(self.retro_transformer.template_db.find({
-                    'index': {'$in': template_ids},
-                    'template_set': self.template_set,
-                }))
-            else:
-                templates = [self.retro_transformer.templates[tid] for tid in template_ids]
-            rxn_data['tforms'] = [str(t.get('_id', -1)) for t in templates]
-            rxn_data['num_examples'] = int(sum([t.get('count', 1) for t in templates]))
-            rxn_data['necessary_reagent'] = templates[0].get('necessary_reagent', '')
+            info = self.retro_transformer.retrieve_template_metadata(template_ids)
+            rxn_data.update(info)
 
             precursor_smiles = rxn.split('>>')[0]
             rxn_data['precursor_smiles'] = precursor_smiles

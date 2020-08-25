@@ -861,21 +861,6 @@ class MCTS:
         num_reactions = len(self.status)
         return num_chemicals, num_reactions, []
 
-    def tid_list_to_info_dict(self, tids):
-        """
-        Returns dict of info from a given list of templates.
-
-            Args:
-                tids (list of int): Template IDs to get info about.
-        """
-        templates = [self.retroTransformer.templates[tid] for tid in tids]
-
-        return {
-            'tforms': [str(t.get('_id', -1)) for t in templates],
-            'num_examples': int(sum([t.get('count', 1) for t in templates])),
-            'necessary_reagent': templates[0].get('necessary_reagent', ''),
-        }
-
     def return_trees(self):
         """Returns retrosynthetic pathways trees and their size."""
 
@@ -952,7 +937,7 @@ class MCTS:
                         for path in DLS_rxn(chem_smi, tid, rct_smi, depth):
                             yield [rxn_dict(rxnsmiles_to_id(rxn_smiles), rxn_smiles, children=path,
                                             plausibility=rxn.plausibility, template_score=rxn.template_score,
-                                            **self.tid_list_to_info_dict(rxn.tforms))]
+                                            **self.retroTransformer.retrieve_template_metadata(rxn.tforms))]
                         done_children_of_this_chemical.append(rxn_smiles)
 
         def DLS_rxn(chem_smi, template_idx, rct_smi, depth):
@@ -1361,7 +1346,7 @@ class MCTS:
                 continue
 
             template_ids = node_data['tforms']
-            info = self.tid_list_to_info_dict(template_ids)
+            info = self.retroTransformer.retrieve_template_metadata(template_ids)
             node_data.update(info)
 
             precursor_smiles = node.split('>>')[0]

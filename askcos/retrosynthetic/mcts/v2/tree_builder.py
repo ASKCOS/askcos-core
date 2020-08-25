@@ -131,7 +131,7 @@ class MCTS:
         self.max_scscore = kwargs.get('max_scscore', None)
         self.max_elements = kwargs.get('max_elements', None)
         self.min_history = kwargs.get('min_history', None)
-        self.termination_logic = kwargs.get('termination_logic', {'and': 'buyable'})
+        self.termination_logic = kwargs.get('termination_logic', {'and': ['buyable']})
         self.buyables_source = kwargs.get('buyables_source', None)
 
     def to_branching(self):

@@ -340,7 +340,7 @@ class MCTS:
         if template not in explored:
             explored.append(template)
             precursors = self._get_precursors(leaf, template)
-            self._process_precursors(leaf, template, precursors, chem_path)
+            self._process_precursors(leaf, template, precursors)
 
     def _update(self, chem_path, rxn_path):
         """
@@ -535,7 +535,7 @@ class MCTS:
 
         return precursors
 
-    def _process_precursors(self, target, template, precursors, path):
+    def _process_precursors(self, target, template, precursors):
         """
         Process a list of precursors:
         1. Filter precursors by fast filter score
@@ -560,33 +560,27 @@ class MCTS:
             if any(reactant in self.banned_chemicals for reactant in reactant_list):
                 continue
 
+            template_score = self.tree.nodes[target]['templates'][template]
+
+            if reaction_smiles in self.reactions:
+                # This reaction already exists
+                rxn_data = self.tree.nodes[reaction_smiles]
+                rxn_data['templates'].append(template)
+                rxn_data['template_score'] = max(rxn_data['template_score'], template_score)
+            else:
+                # This is new, so create a Reaction node
+                self.create_reaction_node(reaction_smiles, template, template_score, ff_score)
+
+            # Add edges to connect target -> reaction -> precursors
+            self.tree.add_edge(target, reaction_smiles)
             for reactant in reactant_list:
-                if reactant in self.chemicals:
-                    # This is already in the tree somewhere, need to check whether we're creating a cycle
-                    if reactant in path or nx.has_path(self.tree, reactant, target):
-                        # This would create a cycle
-                        break
-                else:
+                if reactant not in self.chemicals:
                     # This is new, so create a Chemical node
                     self.create_chemical_node(reactant)
-            else:
-                template_score = self.tree.nodes[target]['templates'][template]
 
-                if reaction_smiles in self.reactions:
-                    # This reaction already exists
-                    rxn_data = self.tree.nodes[reaction_smiles]
-                    rxn_data['templates'].append(template)
-                    rxn_data['template_score'] = max(rxn_data['template_score'], template_score)
-                else:
-                    # This is new, so create a Reaction node
-                    self.create_reaction_node(reaction_smiles, template, template_score, ff_score)
+                self.tree.add_edge(reaction_smiles, reactant)
 
-                # Add edges to connect target -> reaction -> precursors
-                self.tree.add_edge(target, reaction_smiles)
-                for reactant in reactant_list:
-                    self.tree.add_edge(reaction_smiles, reactant)
-
-                self._update_value(reaction_smiles)
+            self._update_value(reaction_smiles)
 
     def create_chemical_node(self, smiles):
         """

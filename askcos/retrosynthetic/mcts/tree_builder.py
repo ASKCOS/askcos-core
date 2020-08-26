@@ -849,16 +849,19 @@ class MCTS:
         return scores, indices
 
     def tree_status(self):
-        """Summarize size of tree after expansion.
+        """
+        Summarize statistics for tree exploration.
 
         Returns:
-            (int, int):
+            (int, int, int):
                 num_chemicals (int): Number of chemical nodes in the tree.
                 num_reactions (int): Number of reaction nodes in the tree.
+                num_templates (int): Total number of applied templates.
         """
         num_chemicals = len(self.Chemicals)
-        num_reactions = len(self.status)
-        return num_chemicals, num_reactions
+        num_reactions = sum(len(cta.reactions) for chem in self.Chemicals.values() for cta in chem.template_idx_results.values())
+        num_templates = len(self.status)
+        return num_chemicals, num_reactions, num_templates
 
     def return_trees(self):
         """Returns retrosynthetic pathways trees and their size."""

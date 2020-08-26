@@ -240,7 +240,7 @@ class MCTS:
         """
         self.build_tree(target, **kwargs)
         paths = self.enumerate_paths(**kwargs)
-        status = len(self.chemicals), len(self.reactions)
+        status = self.tree_status()
         graph = nx.node_link_data(self.get_graph())
         return paths, status, graph
 
@@ -291,6 +291,21 @@ class MCTS:
             info += 'Average in degree: {0:.4f}\n'.format(sum(d for _, d in self.tree.in_degree()) / num_nodes)
             info += 'Average out degree: {0:.4f}'.format(sum(d for _, d in self.tree.out_degree()) / num_nodes)
         MyLogger.print_and_log(info, treebuilder_loc)
+
+    def tree_status(self):
+        """
+        Summarize statistics for tree exploration.
+
+        Returns:
+            (int, int, int):
+                num_chemicals (int): Number of chemical nodes in the tree.
+                num_reactions (int): Number of reaction nodes in the tree.
+                num_templates (int): Total number of applied templates.
+        """
+        num_chemicals = len(self.chemicals)
+        num_reactions = len(self.reactions)
+        num_templates = sum(len(self.tree.nodes[chem]['explored']) for chem in self.chemicals)
+        return num_chemicals, num_reactions, num_templates
 
     def clear(self):
         """

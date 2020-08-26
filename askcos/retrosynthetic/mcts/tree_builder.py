@@ -848,7 +848,6 @@ class MCTS:
         scores, indices = template_prioritizer.predict(self.smiles, self.template_count, self.max_cum_template_prob)
         return scores, indices
 
-    # QUESTION: Why return the empty list?
     def tree_status(self):
         """Summarize size of tree after expansion.
 
@@ -859,7 +858,7 @@ class MCTS:
         """
         num_chemicals = len(self.Chemicals)
         num_reactions = len(self.status)
-        return num_chemicals, num_reactions, []
+        return num_chemicals, num_reactions
 
     def return_trees(self):
         """Returns retrosynthetic pathways trees and their size."""
@@ -1196,7 +1195,11 @@ class MCTS:
                         return_first=return_first,
                         )
 
-        return self.return_trees()
+        paths = self.enumerate_paths(**kwargs)
+        status = self.tree_status()
+        graph = nx.node_link_data(self.tree)
+
+        return paths, status, graph
 
     def is_a_terminal_node(self, smiles, ppg, hist):
         """

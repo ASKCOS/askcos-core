@@ -241,13 +241,7 @@ class MCTS:
         self.build_tree(target, **kwargs)
         paths = self.enumerate_paths(**kwargs)
         status = len(self.chemicals), len(self.reactions)
-        if paths:
-            graph = nx.node_link_data(self.get_union_of_paths())
-            for entry in graph['nodes']:
-                if entry['type'] == 'chemical':
-                    entry['templates'] = []
-        else:
-            graph = None
+        graph = nx.node_link_data(self.get_graph())
         return paths, status, graph
 
     def build_tree(self, target, **kwargs):

@@ -1294,6 +1294,7 @@ class MCTS:
             'rms_molwt',
             'num_rings',
             'scscore',
+            'rank',
         }
         for node, node_data in graph.nodes.items():
             attr_to_remove = [attr for attr in node_data if attr not in attr_to_keep]
@@ -1340,6 +1341,7 @@ class MCTS:
         Update metadata for all reaction nodes.
 
         Adds the following fields:
+            * rank
             * tforms
             * num_examples
             * necessary_reagent
@@ -1349,17 +1351,21 @@ class MCTS:
         """
         for node, node_data in graph.nodes.items():
             if node_data['type'] == 'chemical':
-                continue
+                reactions = sorted(graph.successors(node),
+                                   key=lambda x: graph.nodes[x]['template_score'],
+                                   reverse=True)
+                for i, rxn in enumerate(reactions):
+                    graph.nodes[rxn]['rank'] = i + 1
+            else:
+                template_ids = node_data['tforms']
+                info = self.retroTransformer.retrieve_template_metadata(template_ids)
+                node_data.update(info)
 
-            template_ids = node_data['tforms']
-            info = self.retroTransformer.retrieve_template_metadata(template_ids)
-            node_data.update(info)
-
-            precursor_smiles = node.split('>>')[0]
-            node_data['precursor_smiles'] = precursor_smiles
-            node_data['rms_molwt'] = rms_molecular_weight(precursor_smiles)
-            node_data['num_rings'] = number_of_rings(precursor_smiles)
-            node_data['scscore'] = self.scscorer.get_score_from_smiles(precursor_smiles, noprice=True)
+                precursor_smiles = node.split('>>')[0]
+                node_data['precursor_smiles'] = precursor_smiles
+                node_data['rms_molwt'] = rms_molecular_weight(precursor_smiles)
+                node_data['num_rings'] = number_of_rings(precursor_smiles)
+                node_data['scscore'] = self.scscorer.get_score_from_smiles(precursor_smiles, noprice=True)
 
 
 if __name__ == '__main__':

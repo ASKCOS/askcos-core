@@ -39,6 +39,7 @@ def clean_json(path):
         'rms_molwt': 'rms_molwt',
         'num_rings': 'num_rings',
         'scscore': 'scscore',
+        'rank': 'rank',
     }
 
     output = {}

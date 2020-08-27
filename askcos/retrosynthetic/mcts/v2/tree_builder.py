@@ -172,6 +172,7 @@ class MCTS:
             'rms_molwt',
             'num_rings',
             'scscore',
+            'rank',
         }
         for node, node_data in graph.nodes.items():
             attr_to_remove = [attr for attr in node_data if attr not in attr_to_keep]
@@ -770,6 +771,7 @@ class MCTS:
         Update metadata for all reaction nodes.
 
         Adds the following fields:
+            * rank
             * tforms
             * num_examples
             * necessary_reagent
@@ -777,6 +779,13 @@ class MCTS:
             * num_rings
             * scscore
         """
+        for chem in self.chemicals:
+            reactions = sorted(self.tree.successors(chem),
+                               key=lambda x: self.tree.nodes[x]['template_score'],
+                               reverse=True)
+            for i, rxn in enumerate(reactions):
+                self.tree.nodes[rxn]['rank'] = i + 1
+
         for rxn in self.reactions:
             rxn_data = self.tree.nodes[rxn]
             template_ids = rxn_data['templates']

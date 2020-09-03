@@ -2,10 +2,20 @@
 Utilities for processing tree builder results.
 """
 
-import itertools
+import uuid
 
 import networkx as nx
 import numpy as np
+
+
+def generate_unique_node():
+    """
+    Generate a unique node label using the UUID specification.
+
+    Use UUIDv4 to generate random UUIDs instead of UUIDv1 which is used by
+    ``networkx.utils.generate_unique_node``.
+    """
+    return str(uuid.uuid4())
 
 
 def nx_paths_to_json(paths, root_uuid):
@@ -114,7 +124,8 @@ def nx_graph_to_paths(tree, root, max_depth=None, max_trees=None,
     Returns:
         list of paths in specified format
     """
-    root_uuid = nx.utils.generate_unique_node()
+    # Use NIL UUID for root so we can easily identify it
+    root_uuid = '00000000-0000-0000-0000-000000000000'
 
     paths = get_paths(
         tree,
@@ -154,7 +165,7 @@ def get_paths(tree, root, root_uuid, max_depth=None, max_trees=None, validate_pa
             yield sub_path
         else:
             for rxn in tree.successors(_node):
-                rxn_uuid = nx.utils.generate_unique_node()
+                rxn_uuid = generate_unique_node()
                 for sub_path in get_rxn_paths(rxn, rxn_uuid, chem_path + [_node]):
                     sub_path.add_node(_uuid, smiles=_node, **tree.nodes[_node])
                     sub_path.add_edge(_uuid, rxn_uuid)
@@ -168,7 +179,7 @@ def get_paths(tree, root, root_uuid, max_depth=None, max_trees=None, validate_pa
         if set(precursors) & set(chem_path):
             # Adding this reaction would create a cycle
             return
-        c_uuid = {c: nx.utils.generate_unique_node() for c in precursors}
+        c_uuid = {c: generate_unique_node() for c in precursors}
         for path_combo in itertools.product(*(get_chem_paths(c, c_uuid[c], chem_path) for c in precursors)):
             sub_path = nx.union_all(path_combo)
             sub_path.add_node(_uuid, smiles=_node, **tree.nodes[_node])

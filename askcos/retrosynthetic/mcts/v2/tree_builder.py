@@ -729,13 +729,14 @@ class MCTS:
         return (bool(or_criteria) and any(local_dict[criteria]() for criteria in or_criteria) or
                 bool(and_criteria) and all(local_dict[criteria]() for criteria in and_criteria))
 
-    def enumerate_paths(self, path_format='json', sorting_metric='plausibility',
+    def enumerate_paths(self, path_format='json', json_format='treedata', sorting_metric='plausibility',
                         validate_paths=True, **kwargs):
         """
         Return list of paths to buyables starting from the target node.
 
         Args:
             path_format (str): pathway output format, supports 'graph' or 'json'
+            json_format (str): networkx json format, supports 'treedata' or 'nodelink'
             sorting_metric (str): how pathways are sorted, supports 'plausibility',
                 'number_of_starting_materials', 'number_of_reactions'
             validate_paths (bool): require all leaves to meet terminal criteria
@@ -760,7 +761,7 @@ class MCTS:
         if path_format == 'graph':
             paths = self.paths
         elif path_format == 'json':
-            paths = nx_paths_to_json(self.paths, self.target_uuid)
+            paths = nx_paths_to_json(self.paths, self.target_uuid, json_format=json_format)
         else:
             raise ValueError('Unrecognized format type {0}'.format(path_format))
 

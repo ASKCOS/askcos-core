@@ -7,6 +7,8 @@ import uuid
 import networkx as nx
 import numpy as np
 
+NODE_LINK_ATTRS = {'source': 'from', 'target': 'to', 'name': 'id', 'key': 'key', 'link': 'edges'}
+
 
 def generate_unique_node():
     """
@@ -18,17 +20,28 @@ def generate_unique_node():
     return str(uuid.uuid4())
 
 
-def nx_paths_to_json(paths, root_uuid):
+def nx_paths_to_json(paths, root_uuid, json_format='treedata'):
     """
     Convert list of paths from networkx graphs to json.
     """
-    return [clean_json(nx.tree_data(path, root_uuid)) for path in paths]
+    if json_format == 'treedata':
+        return [clean_json(nx.tree_data(path, root_uuid)) for path in paths]
+    elif json_format == 'nodelink':
+        return [clean_json(nx.node_link_data(path, attrs=NODE_LINK_ATTRS)) for path in paths]
+    else:
+        raise ValueError('Unsupported value for json_format: {0}'.format(json_format))
 
 
 def clean_json(path):
     """
     Clean up json representation of a pathway. Accepts paths from either
     tree builder version.
+
+    Note about chemical/reaction node identification:
+        * For treedata format, chemical nodes have an ``is_chemical`` attribute,
+          while reaction nodes have an ``is_reaction`` attribute
+        * For nodelink format, all nodes have a ``type`` attribute, whose value
+          is either ``chemical`` or ``reaction``
     """
     # Only fields in this dictionary are kept
     key_map = {
@@ -43,8 +56,6 @@ def clean_json(path):
         'tforms': 'tforms',
         'num_examples': 'num_examples',
         'necessary_reagent': 'necessary_reagent',
-        'is_chemical': 'is_chemical',
-        'is_reaction': 'is_reaction',
         'precursor_smiles': 'precursor_smiles',
         'rms_molwt': 'rms_molwt',
         'num_rings': 'num_rings',
@@ -52,20 +63,31 @@ def clean_json(path):
         'rank': 'rank',
     }
 
-    output = {}
-    for key, value in path.items():
-        if key in key_map:
-            output[key_map[key]] = value
-        elif key == 'type':
-            if value == 'chemical':
-                output['is_chemical'] = True
-            elif value == 'reaction':
-                output['is_reaction'] = True
-        elif key == 'children':
-            output['children'] = [clean_json(c) for c in value]
+    if 'nodes' in path:
+        # Node link format
+        nodes = []
+        for node in path['nodes']:
+            new_node = {key_map[key]: value for key, value in node.items() if key in key_map}
+            new_node['type'] = node['type']
+            nodes.append(new_node)
+        path['nodes'] = nodes
+        output = path
+    else:
+        # Tree data format
+        output = {}
+        for key, value in path.items():
+            if key in key_map:
+                output[key_map[key]] = value
+            elif key == 'type':
+                if value == 'chemical':
+                    output['is_chemical'] = True
+                elif value == 'reaction':
+                    output['is_reaction'] = True
+            elif key == 'children':
+                output['children'] = [clean_json(c) for c in value]
 
-    if 'children' not in output:
-        output['children'] = []
+        if 'children' not in output:
+            output['children'] = []
 
     return output
 

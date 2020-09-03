@@ -1303,12 +1303,13 @@ class MCTS:
 
         return graph
 
-    def enumerate_paths(self, path_format='json', validate_paths=True, **kwargs):
+    def enumerate_paths(self, path_format='json', json_format='treedata', validate_paths=True, **kwargs):
         """
         Return list of paths to buyables starting from the target node.
 
         Args:
             path_format (str): pathway output format, supports 'graph' or 'json'
+            json_format (str): networkx json format, supports 'treedata' or 'nodelink'
             validate_paths (bool): require all leaves to meet terminal criteria
 
         Returns:
@@ -1330,7 +1331,7 @@ class MCTS:
         if path_format == 'graph':
             paths = self.paths
         elif path_format == 'json':
-            paths = nx_paths_to_json(self.paths, self.target_uuid)
+            paths = nx_paths_to_json(self.paths, self.target_uuid, json_format=json_format)
         else:
             raise ValueError('Unrecognized format type {0}'.format(path_format))
 

@@ -6,6 +6,7 @@ import time
 from collections import defaultdict
 from multiprocessing import Process, Manager, Queue
 
+import networkx as nx
 import numpy as np
 import rdkit.Chem as Chem
 from pymongo import MongoClient
@@ -14,12 +15,15 @@ import askcos.global_config as gc
 from askcos.retrosynthetic.mcts.nodes import Chemical, Reaction, ChemicalTemplateApplication
 from askcos.retrosynthetic.transformer import RetroTransformer
 from askcos.utilities.buyable.pricer import Pricer
+from askcos.utilities.descriptors import rms_molecular_weight, number_of_rings
 from askcos.utilities.formats import chem_dict, rxn_dict
 from askcos.utilities.io.logger import MyLogger
 from askcos.utilities.historian.chemicals import ChemHistorian
 from askcos.prioritization.precursors.scscore import SCScorePrecursorPrioritizer
 from askcos.prioritization.templates.relevance import RelevanceTemplatePrioritizer
 from askcos.synthetic.evaluation.fast_filter import FastFilterScorer
+
+from .utils import chem_to_nx_graph, nx_graph_to_paths, nx_paths_to_json
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
@@ -844,33 +848,20 @@ class MCTS:
         scores, indices = template_prioritizer.predict(self.smiles, self.template_count, self.max_cum_template_prob)
         return scores, indices
 
-    # QUESTION: Why return the empty list?
     def tree_status(self):
-        """Summarize size of tree after expansion.
+        """
+        Summarize statistics for tree exploration.
 
         Returns:
-            (int, int):
+            (int, int, int):
                 num_chemicals (int): Number of chemical nodes in the tree.
                 num_reactions (int): Number of reaction nodes in the tree.
+                num_templates (int): Total number of applied templates.
         """
         num_chemicals = len(self.Chemicals)
-        num_reactions = len(self.status)
-        return num_chemicals, num_reactions, []
-
-    def tid_list_to_info_dict(self, tids):
-        """
-        Returns dict of info from a given list of templates.
-
-            Args:
-                tids (list of int): Template IDs to get info about.
-        """
-        templates = [self.retroTransformer.templates[tid] for tid in tids]
-
-        return {
-            'tforms': [str(t.get('_id', -1)) for t in templates],
-            'num_examples': int(sum([t.get('count', 1) for t in templates])),
-            'necessary_reagent': templates[0].get('necessary_reagent', ''),
-        }
+        num_reactions = sum(len(cta.reactions) for chem in self.Chemicals.values() for cta in chem.template_idx_results.values())
+        num_templates = len(self.status)
+        return num_chemicals, num_reactions, num_templates
 
     def return_trees(self):
         """Returns retrosynthetic pathways trees and their size."""
@@ -948,7 +939,7 @@ class MCTS:
                         for path in DLS_rxn(chem_smi, tid, rct_smi, depth):
                             yield [rxn_dict(rxnsmiles_to_id(rxn_smiles), rxn_smiles, children=path,
                                             plausibility=rxn.plausibility, template_score=rxn.template_score,
-                                            **self.tid_list_to_info_dict(rxn.tforms))]
+                                            **self.retroTransformer.retrieve_template_metadata(rxn.tforms))]
                         done_children_of_this_chemical.append(rxn_smiles)
 
         def DLS_rxn(chem_smi, template_idx, rct_smi, depth):
@@ -1207,7 +1198,11 @@ class MCTS:
                         return_first=return_first,
                         )
 
-        return self.return_trees()
+        paths = self.enumerate_paths(**kwargs)
+        status = self.tree_status()
+        graph = nx.node_link_data(self.tree)
+
+        return paths, status, graph
 
     def is_a_terminal_node(self, smiles, ppg, hist):
         """
@@ -1268,14 +1263,110 @@ class MCTS:
     def return_chemical_results(self):
         results = defaultdict(list)
         for chemical in self.Chemicals.values():
-            if not chemical.template_idx_results:
-                results[chemical.smiles]
             for cta in chemical.template_idx_results.values():
                 for res in cta.reactions.values():
                     reaction = vars(res)
                     reaction['pathway_count'] = int(reaction['pathway_count'])
                     results[chemical.smiles].append(reaction)
         return dict(results)
+
+    def get_graph(self):
+        """
+        Convert tree builder results to networkx graph.
+        """
+        graph = chem_to_nx_graph(list(self.Chemicals.values()))
+        self.update_reaction_data(graph)
+
+        # Remove unnecessary attributes
+        attr_to_keep = {
+            'smiles',
+            'type',
+            'purchase_price',
+            'as_reactant',
+            'as_product',
+            'terminal',
+            'plausibility',
+            'template_score',
+            'tforms',
+            'num_examples',
+            'necessary_reagent',
+            'precursor_smiles',
+            'rms_molwt',
+            'num_rings',
+            'scscore',
+            'rank',
+        }
+        for node, node_data in graph.nodes.items():
+            attr_to_remove = [attr for attr in node_data if attr not in attr_to_keep]
+            for attr in attr_to_remove:
+                del node_data[attr]
+
+        return graph
+
+    def enumerate_paths(self, path_format='json', json_format='treedata', validate_paths=True, **kwargs):
+        """
+        Return list of paths to buyables starting from the target node.
+
+        Args:
+            path_format (str): pathway output format, supports 'graph' or 'json'
+            json_format (str): networkx json format, supports 'treedata' or 'nodelink'
+            validate_paths (bool): require all leaves to meet terminal criteria
+
+        Returns:
+            list of paths in specified format
+        """
+        self.tree = self.get_graph()
+
+        self.paths, self.target_uuid = nx_graph_to_paths(
+            self.tree,
+            self.smiles,
+            max_depth=self.max_depth,
+            max_trees=self.max_trees,
+            sorting_metric=self.sort_trees_by,
+            validate_paths=validate_paths,
+        )
+
+        MyLogger.print_and_log('Found {0} paths to buyable chemicals.'.format(len(self.paths)), treebuilder_loc)
+
+        if path_format == 'graph':
+            paths = self.paths
+        elif path_format == 'json':
+            paths = nx_paths_to_json(self.paths, self.target_uuid, json_format=json_format)
+        else:
+            raise ValueError('Unrecognized format type {0}'.format(path_format))
+
+        return paths
+
+    def update_reaction_data(self, graph):
+        """
+        Update metadata for all reaction nodes.
+
+        Adds the following fields:
+            * rank
+            * tforms
+            * num_examples
+            * necessary_reagent
+            * precursor_smiles
+            * num_rings
+            * scscore
+        """
+        for node, node_data in graph.nodes.items():
+            if node_data['type'] == 'chemical':
+                reactions = sorted(graph.successors(node),
+                                   key=lambda x: graph.nodes[x]['template_score'],
+                                   reverse=True)
+                for i, rxn in enumerate(reactions):
+                    graph.nodes[rxn]['rank'] = i + 1
+            else:
+                template_ids = node_data['tforms']
+                info = self.retroTransformer.retrieve_template_metadata(template_ids)
+                node_data.update(info)
+
+                precursor_smiles = node.split('>>')[0]
+                node_data['precursor_smiles'] = precursor_smiles
+                node_data['rms_molwt'] = rms_molecular_weight(precursor_smiles)
+                node_data['num_rings'] = number_of_rings(precursor_smiles)
+                node_data['scscore'] = self.scscorer.get_score_from_smiles(precursor_smiles, noprice=True)
 
 
 if __name__ == '__main__':

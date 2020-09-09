@@ -531,6 +531,28 @@ class RetroTransformer(TemplateTransformer):
 
         return all_outcomes
 
+    def retrieve_template_metadata(self, template_ids, template_set=None):
+        """
+        Retrieve metadata for the given list of template IDs.
+
+        Args:
+            template_ids (list): template IDs to look up
+            template_set (str, optional): template set to get templates from
+
+        Returns:
+            dict containing `tforms`, `num_examples`, and `necessary_reagent`
+        """
+        if template_set is None:
+            template_set = self.template_set
+
+        templates = [x for x in self.templates if x['index'] in template_ids and x['template_set'] == template_set]
+
+        return {
+            'tforms': [str(t.get('_id', -1)) for t in templates],
+            'num_examples': int(sum([t.get('count', 1) for t in templates])),
+            'necessary_reagent': templates[0].get('necessary_reagent', ''),
+        }
+
 
 if __name__ == '__main__':
     MyLogger.initialize_logFile()

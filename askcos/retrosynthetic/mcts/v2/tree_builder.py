@@ -8,6 +8,8 @@ import numpy as np
 from rdkit import Chem
 from rdchiral.initialization import rdchiralReaction, rdchiralReactants
 
+from askcos.retrosynthetic.mcts.utils import nx_graph_to_paths, nx_paths_to_json
+from askcos.utilities.descriptors import rms_molecular_weight, number_of_rings
 from askcos.utilities.io.logger import MyLogger
 
 treebuilder_loc = 'mcts_tree_builder_v2'
@@ -146,6 +148,39 @@ class MCTS:
             data.update(self.tree.nodes[smiles])
         return branching
 
+    def get_graph(self):
+        """
+        Return cleaned version of original graph.
+        """
+        self.update_reaction_data()
+        graph = self.tree.copy(as_view=False)
+
+        # Remove unnecessary attributes
+        attr_to_keep = {
+            'smiles',
+            'type',
+            'purchase_price',
+            'as_reactant',
+            'as_product',
+            'terminal',
+            'plausibility',
+            'template_score',
+            'tforms',
+            'num_examples',
+            'necessary_reagent',
+            'precursor_smiles',
+            'rms_molwt',
+            'num_rings',
+            'scscore',
+            'rank',
+        }
+        for node, node_data in graph.nodes.items():
+            attr_to_remove = [attr for attr in node_data if attr not in attr_to_keep]
+            for attr in attr_to_remove:
+                del node_data[attr]
+
+        return graph
+
     def get_union_of_paths(self):
         """
         Returns the union of self.paths as a single tree.
@@ -206,14 +241,8 @@ class MCTS:
         """
         self.build_tree(target, **kwargs)
         paths = self.enumerate_paths(**kwargs)
-        status = len(self.chemicals), len(self.reactions)
-        if paths:
-            graph = nx.node_link_data(self.get_union_of_paths())
-            for entry in graph['nodes']:
-                if entry['type'] == 'chemical':
-                    entry['templates'] = []
-        else:
-            graph = None
+        status = self.tree_status()
+        graph = nx.node_link_data(self.get_graph())
         return paths, status, graph
 
     def build_tree(self, target, **kwargs):
@@ -264,6 +293,21 @@ class MCTS:
             info += 'Average out degree: {0:.4f}'.format(sum(d for _, d in self.tree.out_degree()) / num_nodes)
         MyLogger.print_and_log(info, treebuilder_loc)
 
+    def tree_status(self):
+        """
+        Summarize statistics for tree exploration.
+
+        Returns:
+            (int, int, int):
+                num_chemicals (int): Number of chemical nodes in the tree.
+                num_reactions (int): Number of reaction nodes in the tree.
+                num_templates (int): Total number of applied templates.
+        """
+        num_chemicals = len(self.chemicals)
+        num_reactions = len(self.reactions)
+        num_templates = sum(len(self.tree.nodes[chem]['explored']) for chem in self.chemicals)
+        return num_chemicals, num_reactions, num_templates
+
     def clear(self):
         """
         Clear tree and reset chemicals and reactions.
@@ -311,7 +355,7 @@ class MCTS:
         if template not in explored:
             explored.append(template)
             precursors = self._get_precursors(leaf, template)
-            self._process_precursors(leaf, template, precursors, chem_path)
+            self._process_precursors(leaf, template, precursors)
 
     def _update(self, chem_path, rxn_path):
         """
@@ -506,7 +550,7 @@ class MCTS:
 
         return precursors
 
-    def _process_precursors(self, target, template, precursors, path):
+    def _process_precursors(self, target, template, precursors):
         """
         Process a list of precursors:
         1. Filter precursors by fast filter score
@@ -531,33 +575,27 @@ class MCTS:
             if any(reactant in self.banned_chemicals for reactant in reactant_list):
                 continue
 
+            template_score = self.tree.nodes[target]['templates'][template]
+
+            if reaction_smiles in self.reactions:
+                # This reaction already exists
+                rxn_data = self.tree.nodes[reaction_smiles]
+                rxn_data['templates'].append(template)
+                rxn_data['template_score'] = max(rxn_data['template_score'], template_score)
+            else:
+                # This is new, so create a Reaction node
+                self.create_reaction_node(reaction_smiles, template, template_score, ff_score)
+
+            # Add edges to connect target -> reaction -> precursors
+            self.tree.add_edge(target, reaction_smiles)
             for reactant in reactant_list:
-                if reactant in self.chemicals:
-                    # This is already in the tree somewhere, need to check whether we're creating a cycle
-                    if reactant in path or nx.has_path(self.tree, reactant, target):
-                        # This would create a cycle
-                        break
-                else:
+                if reactant not in self.chemicals:
                     # This is new, so create a Chemical node
                     self.create_chemical_node(reactant)
-            else:
-                template_score = self.tree.nodes[target]['templates'][template]
 
-                if reaction_smiles in self.reactions:
-                    # This reaction already exists
-                    rxn_data = self.tree.nodes[reaction_smiles]
-                    rxn_data['templates'].append(template)
-                    rxn_data['template_score'] = max(rxn_data['template_score'], template_score)
-                else:
-                    # This is new, so create a Reaction node
-                    self.create_reaction_node(reaction_smiles, template, template_score, ff_score)
+                self.tree.add_edge(reaction_smiles, reactant)
 
-                # Add edges to connect target -> reaction -> precursors
-                self.tree.add_edge(target, reaction_smiles)
-                for reactant in reactant_list:
-                    self.tree.add_edge(reaction_smiles, reactant)
-
-                self._update_value(reaction_smiles)
+            self._update_value(reaction_smiles)
 
     def create_chemical_node(self, smiles):
         """
@@ -606,7 +644,7 @@ class MCTS:
         self.tree.add_node(
             smiles,
             est_value=0.,       # score for how feasible a route is, based on whether its precursors are terminal
-            ff_score=ff_score,
+            plausibility=ff_score,
             solved=False,             # whether a path to terminal leaves has been found from this node
             template_score=template_score,
             templates=[template],
@@ -691,172 +729,72 @@ class MCTS:
         return (bool(or_criteria) and any(local_dict[criteria]() for criteria in or_criteria) or
                 bool(and_criteria) and all(local_dict[criteria]() for criteria in and_criteria))
 
-    def enumerate_paths(self, path_format='json', sorting_metric='plausibility',
-                        validate_paths=True, legacy_json=True, **kwargs):
+    def enumerate_paths(self, path_format='json', json_format='treedata', sorting_metric='plausibility',
+                        validate_paths=True, **kwargs):
         """
         Return list of paths to buyables starting from the target node.
 
         Args:
             path_format (str): pathway output format, supports 'graph' or 'json'
+            json_format (str): networkx json format, supports 'treedata' or 'nodelink'
             sorting_metric (str): how pathways are sorted, supports 'plausibility',
                 'number_of_starting_materials', 'number_of_reactions'
             validate_paths (bool): require all leaves to meet terminal criteria
-            legacy_json (bool): convert to json format used by old tree builder
 
         Returns:
             list of paths in specified format
         """
         # Resolve template data before doing any node duplication
-        self.retrieve_template_data()
+        self.update_reaction_data()
 
-        paths = self.get_paths(validate_paths=validate_paths)  # returns generator
-
-        self.paths = sort_paths(paths, sorting_metric)  # converts to a list
+        self.paths, self.target_uuid = nx_graph_to_paths(
+            self.tree,
+            self.target,
+            max_depth=self.max_depth,
+            max_trees=self.max_trees,
+            sorting_metric=sorting_metric,
+            validate_paths=validate_paths,
+        )
 
         MyLogger.print_and_log('Found {0} paths to buyable chemicals.'.format(len(self.paths)), treebuilder_loc)
 
         if path_format == 'graph':
             paths = self.paths
         elif path_format == 'json':
-            paths = [nx.tree_data(path, self.target_uuid) for path in self.paths]
-            if legacy_json:
-                paths = [translate_json(path) for path in paths]
+            paths = nx_paths_to_json(self.paths, self.target_uuid, json_format=json_format)
         else:
             raise ValueError('Unrecognized format type {0}'.format(path_format))
 
         return paths
 
-    def retrieve_template_data(self):
+    def update_reaction_data(self):
         """
-        Retrieve template data for all reaction nodes using template ids.
+        Update metadata for all reaction nodes.
+
+        Adds the following fields:
+            * rank
+            * tforms
+            * num_examples
+            * necessary_reagent
+            * precursor_smiles
+            * num_rings
+            * scscore
         """
+        for chem in self.chemicals:
+            reactions = sorted(self.tree.successors(chem),
+                               key=lambda x: self.tree.nodes[x]['template_score'],
+                               reverse=True)
+            for i, rxn in enumerate(reactions):
+                self.tree.nodes[rxn]['rank'] = i + 1
+
         for rxn in self.reactions:
             rxn_data = self.tree.nodes[rxn]
             template_ids = rxn_data['templates']
-            if hasattr(self.retro_transformer, 'template_db'):
-                templates = list(self.retro_transformer.template_db.find({
-                    'index': {'$in': template_ids},
-                    'template_set': self.template_set,
-                }))
-            else:
-                templates = [self.retro_transformer.templates[tid] for tid in template_ids]
-            rxn_data['tforms'] = [str(t.get('_id', -1)) for t in templates]
-            rxn_data['num_examples'] = int(sum([t.get('count', 1) for t in templates]))
-            rxn_data['necessary_reagent'] = templates[0].get('necessary_reagent', '')
+            info = self.retro_transformer.retrieve_template_metadata(template_ids)
+            rxn_data.update(info)
 
-    def get_paths(self, validate_paths=True):
-        """
-        Generate all paths from the root node as `nx.DiGraph` objects.
-
-        All node attributes are copied to the output paths.
-
-        Args:
-            validate_paths (bool): require all leaves to meet terminal criteria
-
-        Returns:
-            generator of paths
-        """
-        def get_chem_paths(_node, _uuid, _depth=0):
-            """
-            Return generator of paths with current node as the root.
-            """
-            if self.tree.out_degree(_node) == 0 or self.max_depth is not None and _depth >= self.max_depth:
-                sub_path = nx.DiGraph()
-                sub_path.add_node(_uuid, smiles=_node, **self.tree.nodes[_node])
-                yield sub_path
-            else:
-                for rxn in self.tree.successors(_node):
-                    rxn_uuid = nx.utils.generate_unique_node()
-                    for sub_path in get_rxn_paths(rxn, rxn_uuid, _depth + 1):
-                        sub_path.add_node(_uuid, smiles=_node, **self.tree.nodes[_node])
-                        sub_path.add_edge(_uuid, rxn_uuid)
-                        yield sub_path
-
-        def get_rxn_paths(_node, _uuid, _depth=0):
-            """
-            Return generator of paths with current node as root.
-            """
-            c_uuid = {c: nx.utils.generate_unique_node() for c in self.tree.successors(_node)}
-            for path_combo in itertools.product(*(get_chem_paths(c, c_uuid[c], _depth) for c in self.tree.successors(_node))):
-                sub_path = nx.union_all(path_combo)
-                sub_path.add_node(_uuid, smiles=_node, **self.tree.nodes[_node])
-                for c in self.tree.successors(_node):
-                    sub_path.add_edge(_uuid, c_uuid[c])
-                yield sub_path
-
-        def validate_path(_path):
-            """Return true if all leaves are terminal."""
-            leaves = (v for v, d in _path.out_degree() if d == 0)
-            return all(_path.nodes[v]['terminal'] for v in leaves)
-
-        self.target_uuid = nx.utils.generate_unique_node()
-        num_paths = 0
-        for path in get_chem_paths(self.target, self.target_uuid):
-            if self.max_trees is not None and num_paths >= self.max_trees:
-                break
-            if validate_paths and validate_path(path):
-                num_paths += 1
-                yield path
-
-
-def sort_paths(paths, metric):
-    """
-    Sort paths by some metric.
-    """
-
-    def number_of_starting_materials(tree):
-        return len([v for v, d in tree.out_degree() if d == 0])
-
-    def number_of_reactions(tree):
-        return len([v for v in nx.dag_longest_path(tree) if tree.nodes[v]['type'] == 'reaction'])
-
-    def overall_plausibility(tree):
-        return np.prod([d['ff_score'] for v, d in tree.nodes(data=True) if d['type'] == 'reaction'])
-
-    if metric == 'plausibility':
-        paths = sorted(paths, key=lambda x: overall_plausibility(x), reverse=True)
-    elif metric == 'number_of_starting_materials':
-        paths = sorted(paths, key=lambda x: number_of_starting_materials(x))
-    elif metric == 'number_of_reactions':
-        paths = sorted(paths, key=lambda x: number_of_reactions(x))
-    else:
-        raise ValueError('Need something to sort by! Invalid option provided: {}'.format(metric))
-
-    return paths
-
-
-def translate_json(path):
-    """
-    Convert json output from networkx to match output of old tree builder.
-
-    Input should be a deserialized python object, not a raw json string.
-    """
-    key_map = {
-        'smiles': 'smiles',
-        'id': 'id',
-        'as_reactant': 'as_reactant',
-        'as_product': 'as_product',
-        'ff_score': 'plausibility',
-        'purchase_price': 'ppg',
-        'template_score': 'template_score',
-        'tforms': 'tforms',
-        'num_examples': 'num_examples',
-        'necessary_reagent': 'necessary_reagent',
-    }
-
-    output = {}
-    for key, value in path.items():
-        if key in key_map:
-            output[key_map[key]] = value
-        elif key == 'type':
-            if value == 'chemical':
-                output['is_chemical'] = True
-            elif value == 'reaction':
-                output['is_reaction'] = True
-        elif key == 'children':
-            output['children'] = [translate_json(c) for c in value]
-
-    if 'children' not in output:
-        output['children'] = []
-
-    return output
+            precursor_smiles = rxn.split('>>')[0]
+            rxn_data['precursor_smiles'] = precursor_smiles
+            rxn_data['rms_molwt'] = rms_molecular_weight(precursor_smiles)
+            rxn_data['num_rings'] = number_of_rings(precursor_smiles)
+            rxn_data['scscore'] = self.scscorer.get_score_from_smiles(precursor_smiles, noprice=True)

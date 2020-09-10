@@ -44,14 +44,20 @@ class TestPathwayRanker(unittest.TestCase):
         output = ranker.scorer(self.trees, clustering=True)
 
         self.assertIn('scores', output)
-        self.assertEqual(len(output['scores']), 3)
+        self.assertEqual(len(output['scores']), 5)
+        self.assertEqual(output['scores'][0], -1)
+        self.assertEqual(output['scores'][1], -1)
+
         self.assertIn('encoded_trees', output)
-        self.assertEqual(len(output['encoded_trees']), 3)
-        self.assertEqual(len(output['encoded_trees'][0]), 512)
-        self.assertIn('original_indices', output)
-        self.assertEqual(output['original_indices'], [2, 3, 4])
+        self.assertEqual(len(output['encoded_trees']), 5)
+        self.assertEqual(len(output['encoded_trees'][0]), 0)
+        self.assertEqual(len(output['encoded_trees'][1]), 0)
+        self.assertEqual(len(output['encoded_trees'][2]), 512)
+        self.assertEqual(len(output['encoded_trees'][3]), 512)
+        self.assertEqual(len(output['encoded_trees'][4]), 512)
+
         self.assertIn('clusters', output)
-        self.assertEqual(output['clusters'], [0, 1, 2])
+        self.assertEqual(output['clusters'], [-1, -1, 0, 1, 2])
 
 
 if __name__ == '__main__':

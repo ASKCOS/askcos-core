@@ -98,32 +98,47 @@ class PathwayRanker:
         Score a list of retrosynthetic trees relative to each other and also
         cluster them if requested.
 
-        One-step trees cannot be scored and are filtered out of the input.
-        The output includes a list of original indices of the remaining trees
-        to facilitate mapping the results to the original list of trees.
+        One-step trees cannot be scored and are removed for scoring.
+        The result arrays correspond exactly to the order of the input trees,
+        with placeholder values for any one-step trees:
+            * For scores and clusters, the placeholder value is -1.
+            * For encoded_trees, the placeholder value is [] (empty list).
 
         Returns:
             output (dict):
                 scores: list of scores assigned by the pathway ranker
                 encoded_trees: list of embedded representations of the trees
-                original_indices: list of indices from the original input list
                 clusters: list of cluster IDs (if requested)
         """
+        def _fill(array, indices, length, default=-1):
+            """
+            Insert values from array at specified indices to create a new list
+            with the specified length and empty indices filled in with default.
+            """
+            mapping = dict(zip(indices, array))
+            return [mapping.get(i, default) for i in range(length)]
 
         original_indices, batch = self.preprocess(trees)
         data = self.inference(batch)
-        output = self.postprocess(data)
-        output['original_indices'] = original_indices
+        result = self.postprocess(data)
+
+        scores, encoded_trees = result['scores'], result['encoded_trees']
+
+        num_trees = len(trees)
+        output = {
+            'scores': _fill(scores, original_indices, num_trees),
+            'encoded_trees': _fill(encoded_trees, original_indices, num_trees, default=[]),
+        }
 
         if clustering:
             clusters = self._cluster_encoded_trees(
-                [np.array(encoding) for encoding in output['encoded_trees']],
-                scores=output['scores'],
+                [np.array(encoding) for encoding in encoded_trees],
+                scores=scores,
                 cluster_method=cluster_method,
                 min_samples=min_samples,
                 min_cluster_size=min_cluster_size
             )
-            output['clusters'] = clusters
+            output['clusters'] = _fill(clusters, original_indices, num_trees)
 
         return output
 

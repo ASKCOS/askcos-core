@@ -7,6 +7,7 @@ import uuid
 import networkx as nx
 import numpy as np
 
+NIL_UUID = '00000000-0000-0000-0000-000000000000'
 NODE_LINK_ATTRS = {'source': 'from', 'target': 'to', 'name': 'id', 'key': 'key', 'link': 'edges'}
 
 
@@ -132,22 +133,30 @@ def chem_to_nx_graph(chemicals):
 
 
 def nx_graph_to_paths(tree, root, max_depth=None, max_trees=None,
-                      sorting_metric='plausibility', validate_paths=True):
+                      sorting_metric='plausibility', validate_paths=True,
+                      score_trees=False, cluster_trees=False,
+                      pathway_ranker=None, **kwargs):
     """
     Return list of paths to buyables starting from the target node.
 
     Args:
-        path_format (str): pathway output format, supports 'graph' or 'json'
-        sorting_metric (str): how pathways are sorted, supports 'plausibility',
-            'number_of_starting_materials', 'number_of_reactions'
-        validate_paths (bool): require all leaves to meet terminal criteria
-        legacy_json (bool): convert to json format used by old tree builder
+        tree (nx.DiGraph): full graph to resolve pathways from
+        root (str): node ID of the root node (i.e. target chemical)
+        max_depth (int, optional): max tree depth (i.e number of reaction steps)
+        max_trees (int, optional): max number of trees to return
+        sorting_metric (str, optional): how pathways are sorted, supports 'plausibility',
+            'number_of_starting_materials', 'number_of_reactions', or 'score'
+        validate_paths (bool, optional): require all leaves to meet terminal criteria
+        score_trees (bool, optional): whether to score trees
+        cluster_trees (bool, optional): whether to cluster trees
+        pathway_ranker (method, optional): method used to score and cluster trees
+        kwargs (optional): additional arguments to be passed to pathway ranker
 
     Returns:
         list of paths in specified format
     """
     # Use NIL UUID for root so we can easily identify it
-    root_uuid = '00000000-0000-0000-0000-000000000000'
+    root_uuid = NIL_UUID
 
     paths = get_paths(
         tree,
@@ -158,7 +167,10 @@ def nx_graph_to_paths(tree, root, max_depth=None, max_trees=None,
         validate_paths=validate_paths,
     )  # returns generator
 
-    paths = sort_paths(paths, sorting_metric)  # converts to a list
+    if score_trees or sorting_metric == 'score':
+        paths = score_paths(paths, cluster_trees=cluster_trees, pathway_ranker=pathway_ranker, **kwargs)  # returns list
+
+    paths = sort_paths(paths, sorting_metric)  # returns list
 
     return paths, root_uuid
 
@@ -225,6 +237,38 @@ def get_paths(tree, root, root_uuid, max_depth=None, max_trees=None, validate_pa
             yield path
 
 
+def score_paths(paths, cluster_trees=False, pathway_ranker=None, **kwargs):
+    """
+    Score paths using the provided settings.
+
+    Scores and cluster IDs (if requested) are saved as graph attributes.
+    """
+    if pathway_ranker is None:
+        from askcos.retrosynthetic.pathway_ranker import PathwayRanker
+        ranker = PathwayRanker()
+        ranker.load()
+        pathway_ranker = ranker.scorer
+
+    # Turn paths generator into list of graphs and list of json
+    graph_paths, json_paths = [], []
+    for path in paths:
+        graph_paths.append(path)
+        json_paths.append(clean_json(nx.tree_data(path, NIL_UUID)))
+
+    # Filter relevant kwargs
+    kwargs = {k: v for k, v in kwargs.items() if k in {'cluster_method', 'min_samples', 'min_cluster_size'}}
+
+    # Pathway ranker requires json paths
+    results = pathway_ranker(json_paths, clustering=cluster_trees, **kwargs)
+
+    for i, path in enumerate(graph_paths):
+        path.graph['score'] = results['scores'][i]
+        if cluster_trees:
+            path.graph['cluster_id'] = results['clusters'][i]
+
+    return graph_paths
+
+
 def sort_paths(paths, metric):
     """
     Sort paths by some metric.
@@ -242,6 +286,8 @@ def sort_paths(paths, metric):
         paths = sorted(paths, key=lambda x: number_of_starting_materials(x))
     elif metric == 'number_of_reactions':
         paths = sorted(paths, key=lambda x: x.graph['depth'])
+    elif metric == 'score':
+        paths = sorted(paths, key=lambda x: x.graph['score'])
     else:
         raise ValueError('Need something to sort by! Invalid option provided: {}'.format(metric))
 

@@ -219,6 +219,8 @@ def get_paths(tree, root, root_uuid, max_depth=None, max_trees=None, validate_pa
         if max_trees is not None and num_paths >= max_trees:
             break
         if validate_paths and validate_path(path) or not validate_paths:
+            # Calculate depth of this path, i.e. number of reactions in longest branch
+            path.graph['depth'] = [path.nodes[v]['type'] for v in nx.dag_longest_path(path)].count('reaction')
             num_paths += 1
             yield path
 
@@ -231,9 +233,6 @@ def sort_paths(paths, metric):
     def number_of_starting_materials(tree):
         return len([v for v, d in tree.out_degree() if d == 0])
 
-    def number_of_reactions(tree):
-        return len([v for v in nx.dag_longest_path(tree) if tree.nodes[v]['type'] == 'reaction'])
-
     def overall_plausibility(tree):
         return np.prod([d['plausibility'] for v, d in tree.nodes(data=True) if d['type'] == 'reaction'])
 
@@ -242,7 +241,7 @@ def sort_paths(paths, metric):
     elif metric == 'number_of_starting_materials':
         paths = sorted(paths, key=lambda x: number_of_starting_materials(x))
     elif metric == 'number_of_reactions':
-        paths = sorted(paths, key=lambda x: number_of_reactions(x))
+        paths = sorted(paths, key=lambda x: x.graph['depth'])
     else:
         raise ValueError('Need something to sort by! Invalid option provided: {}'.format(metric))
 

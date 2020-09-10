@@ -218,7 +218,7 @@ def get_paths(tree, root, root_uuid, max_depth=None, max_trees=None, validate_pa
     for path in get_chem_paths(root, root_uuid, []):
         if max_trees is not None and num_paths >= max_trees:
             break
-        if validate_paths and validate_path(path):
+        if validate_paths and validate_path(path) or not validate_paths:
             num_paths += 1
             yield path
 

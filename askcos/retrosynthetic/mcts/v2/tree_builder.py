@@ -538,7 +538,7 @@ class MCTS:
         smiles = Chem.MolToSmiles(mol, isomericSmiles=True)
         mol = rdchiralReactants(smiles)
 
-        template = self.retro_transformer.get_one_template_by_idx(template_idx)
+        template = self.retro_transformer.get_one_template_by_idx(template_idx, template_set=self.template_set)
         try:
             template['rxn'] = rdchiralReaction(template['reaction_smarts'])
         except ValueError:

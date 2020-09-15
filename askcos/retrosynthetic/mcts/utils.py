@@ -255,6 +255,12 @@ def score_paths(paths, cluster_trees=False, pathway_ranker=None, **kwargs):
         graph_paths.append(path)
         json_paths.append(clean_json(nx.tree_data(path, NIL_UUID)))
 
+    # Count how many scorable paths there are
+    num_paths = sum(1 for path in graph_paths if path.graph['depth'] > 1)
+    if num_paths == 0:
+        # There's nothing to score
+        return graph_paths
+
     # Filter relevant kwargs
     kwargs = {k: v for k, v in kwargs.items() if k in {'cluster_method', 'min_samples', 'min_cluster_size'}}
 

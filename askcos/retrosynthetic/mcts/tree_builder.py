@@ -1204,6 +1204,9 @@ class MCTS:
                         return_first=return_first,
                         )
 
+        if return_first:
+            kwargs['score_trees'] = kwargs['cluster_trees'] = False
+
         paths = self.enumerate_paths(**kwargs)
         status = self.tree_status()
         graph = nx.node_link_data(self.tree)

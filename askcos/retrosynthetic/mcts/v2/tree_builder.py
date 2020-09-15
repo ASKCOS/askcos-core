@@ -797,6 +797,9 @@ class MCTS:
         # Resolve template data before doing any node duplication
         self.update_reaction_data()
 
+        if self.return_first:
+            kwargs['score_trees'] = kwargs['cluster_trees'] = False
+
         self.paths, self.target_uuid = nx_graph_to_paths(
             self.tree,
             self.target,

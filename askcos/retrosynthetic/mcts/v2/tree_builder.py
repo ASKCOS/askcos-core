@@ -790,7 +790,7 @@ class MCTS:
         for rxn in self.reactions:
             rxn_data = self.tree.nodes[rxn]
             template_ids = rxn_data['templates']
-            info = self.retro_transformer.retrieve_template_metadata(template_ids)
+            info = self.retro_transformer.retrieve_template_metadata(template_ids, template_set=self.template_set)
             rxn_data.update(info)
 
             precursor_smiles = rxn.split('>>')[0]

@@ -211,24 +211,36 @@ def find_depth(tree, level=0):
     return depth
 
 
-def merge_into_batch(batch):
+def merge_into_batch(batch, to_tensor=False, device=None):
     """
     Merge fingerprints of individual trees into a single set of arrays.
 
     Args:
         batch (list): list of dictionaries containing tree fingerprints
+        to_tensor (bool, optional): if True, convert to torch.tensor
+        device (torch.device, optional): desired device for tensors
 
     Returns:
         dict:
-            pfp: np.ndarray
-            rxnfp: np.ndarray
-            node_order: np.ndarray
-            adjacency_list: np.ndarray
-            edge_order: np.ndarray
+            pfp: np.ndarray or torch.tensor
+            rxnfp: np.ndarray or torch.tensor
+            node_order: np.ndarray or torch.tensor
+            adjacency_list: np.ndarray or torch.tensor
+            edge_order: np.ndarray or torch.tensor
             num_nodes: list
             num_trees: list
             batch_size: int
     """
+    if to_tensor:
+        import torch
+
+        def process_array(array, dtype):
+            dtype_dict = {'float32': torch.float32, 'int64': torch.int64}
+            return torch.tensor(array, device=device, dtype=dtype_dict[dtype])
+    else:
+        def process_array(array, dtype):
+            dtype_dict = {'float32': np.float32, 'int64': np.int64}
+            return array.astype(dtype=dtype_dict[dtype])
 
     pfp = np.vstack([record['pfp'] for record in batch])
     rxnfp = np.vstack([record['rxnfp'] for record in batch])
@@ -257,11 +269,11 @@ def merge_into_batch(batch):
     batch_size = len(batch)
 
     return {
-        'pfp': pfp,
-        'rxnfp': rxnfp,
-        'node_order': node_order,
-        'adjacency_list': adjacency_list,
-        'edge_order': edge_order,
+        'pfp': process_array(pfp, dtype='float32'),
+        'rxnfp': process_array(rxnfp, dtype='float32'),
+        'node_order': process_array(node_order, dtype='int64'),
+        'adjacency_list': process_array(adjacency_list, dtype='int64'),
+        'edge_order': process_array(edge_order, dtype='int64'),
         'num_nodes': num_nodes,
         'num_trees': num_trees,
         'batch_size': batch_size,

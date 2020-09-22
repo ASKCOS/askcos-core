@@ -52,24 +52,8 @@ class PathwayRanker:
             original_indices (list): list of the original indices of the selected trees
             batch (dict): dictionary of generated fingerprints and metadata
         """
-        import torch
-
-        output = convert_askcos_trees(trees)
-
-        # Separate out one-step trees because they can't be ranked
-        original_indices, remaining_trees = zip(*((i, tree) for i, tree in enumerate(output) if tree['depth'] > 1))
-
         # Convert trees to set of input fingerprints and metadata
-        batch = merge_into_batch([tree_to_input(tree) for tree in remaining_trees])
-
-        # Convert fingerprint arrays into tensors
-        batch['pfp'] = torch.tensor(batch['pfp'], device=self.device, dtype=torch.float32)
-        batch['rxnfp'] = torch.tensor(batch['rxnfp'], device=self.device, dtype=torch.float32)
-        batch['node_order'] = torch.tensor(batch['node_order'], device=self.device, dtype=torch.int64)
-        batch['adjacency_list'] = torch.tensor(batch['adjacency_list'], device=self.device, dtype=torch.int64)
-        batch['edge_order'] = torch.tensor(batch['edge_order'], device=self.device, dtype=torch.int64)
-
-        return list(original_indices), batch
+        return merge_into_batch([tree_to_input(tree) for tree in trees], to_tensor=True, device=self.device)
 
     def inference(self, data):
         """
@@ -92,6 +76,13 @@ class PathwayRanker:
             'scores': data['scores'].view(-1,).tolist(),
             'encoded_trees': data['encoded_trees'].tolist(),
         }
+
+    def predict(self, data):
+        """Process data, run inference, and process results."""
+        data = self.preprocess(data)
+        data = self.inference(data)
+        data = self.postprocess(data)
+        return data
 
     def scorer(self, trees, clustering=False, cluster_method='hdbscan', min_samples=5, min_cluster_size=5):
         """
@@ -118,9 +109,14 @@ class PathwayRanker:
             mapping = dict(zip(indices, array))
             return [mapping.get(i, default) for i in range(length)]
 
-        original_indices, batch = self.preprocess(trees)
-        data = self.inference(batch)
-        result = self.postprocess(data)
+        # Process askcos trees to leave only the necessary data
+        output = convert_askcos_trees(trees)
+
+        # Separate out one-step trees because they can't be ranked
+        original_indices, remaining_trees = zip(*((i, tree) for i, tree in enumerate(output) if tree['depth'] > 1))
+
+        # Run prediction
+        result = self.predict(remaining_trees)
 
         scores, encoded_trees = result['scores'], result['encoded_trees']
 

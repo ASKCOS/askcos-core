@@ -5,6 +5,7 @@ import unittest
 import torch
 
 from askcos.retrosynthetic.pathway_ranker.pathway_ranker import PathwayRanker
+from askcos.retrosynthetic.pathway_ranker.utils import convert_askcos_trees
 
 
 class TestPathwayRanker(unittest.TestCase):
@@ -17,10 +18,13 @@ class TestPathwayRanker(unittest.TestCase):
 
     def test_preprocess(self):
         """Test the preprocess method."""
-        ranker = PathwayRanker()
-        original_indices, batch = ranker.preprocess(self.trees)
+        output = convert_askcos_trees(self.trees)
+        original_indices, remaining_trees = zip(*((i, tree) for i, tree in enumerate(output) if tree['depth'] > 1))
 
-        self.assertEqual(original_indices, [2, 3, 4])
+        ranker = PathwayRanker()
+        batch = ranker.preprocess(remaining_trees)
+
+        self.assertEqual(original_indices, (2, 3, 4))
 
         self.assertIn('pfp', batch)
         self.assertIsInstance(batch['pfp'], torch.Tensor)

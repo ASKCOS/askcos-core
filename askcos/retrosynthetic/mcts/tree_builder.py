@@ -939,7 +939,7 @@ class MCTS:
                         for path in DLS_rxn(chem_smi, tid, rct_smi, depth):
                             yield [rxn_dict(rxnsmiles_to_id(rxn_smiles), rxn_smiles, children=path,
                                             plausibility=rxn.plausibility, template_score=rxn.template_score,
-                                            **self.retroTransformer.retrieve_template_metadata(rxn.tforms))]
+                                            **self.retroTransformer.retrieve_template_metadata(rxn.tforms, template_set=self.template_set))]
                         done_children_of_this_chemical.append(rxn_smiles)
 
         def DLS_rxn(chem_smi, template_idx, rct_smi, depth):
@@ -1359,7 +1359,7 @@ class MCTS:
                     graph.nodes[rxn]['rank'] = i + 1
             else:
                 template_ids = node_data['tforms']
-                info = self.retroTransformer.retrieve_template_metadata(template_ids)
+                info = self.retroTransformer.retrieve_template_metadata(template_ids, template_set=self.template_set)
                 node_data.update(info)
 
                 precursor_smiles = node.split('>>')[0]

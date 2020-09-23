@@ -179,3 +179,7 @@ GEN_SELECTIVITY = {
     'max_nb': 10,
     'binary_fdim': 11,
 }
+
+PATHWAY_RANKER = {
+    'model_path': os.path.join(models_path, 'pathway_ranker', 'treeLSTM512-fp2048.pt')
+}

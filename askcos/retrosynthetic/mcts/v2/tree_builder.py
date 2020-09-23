@@ -22,7 +22,44 @@ class MCTS:
                  retro_transformer=None, use_db=False,
                  template_set='reaxys', template_prioritizer='reaxys',
                  precursor_prioritizer='relevanceheuristic',
-                 fast_filter='default', **kwargs):
+                 fast_filter='default', pathway_ranker=None, **kwargs):
+        """
+        Initialize MCTS class.
+
+        Sets default values for settings and loads data and models as
+        needed. Settings are also reset when by ``build_tree``.
+
+        Args:
+            pricer (None or Pricer, optional): Pricer object to be used for
+                checking stop criteria (buyability). If None, will be
+                initialized using default settings from the global
+                configuration. (default: {None})
+            chem_historian (None or ChemHistorian, optional): ChemHistorian
+                object used to see how often chemicals have occured in
+                database. If None, will be loaded from the default file in the
+                global configuration. (default: {None})
+            scscorer (None or SCScorePrecursorPrioritizer, optional): SCScore
+                instance for evaluating termination criteria. If None, will be
+                loaded using default settings. (default: {None})
+            retro_transformer (None or RetroTransformer, optional):
+                RetroTransformer object to be used for expansion when *not*
+                using Celery. If None, will be initialized using the
+                model_loader.load_Retro_Transformer function. (default: {None})
+            use_db (bool, optional): Whether to try connecting to mongodb for
+                loading ``Pricer`` and ``ChemHistorian`` data
+            template_set (str, optional): Specifies which template set to use.
+                (default: {'reaxys'})
+            template_prioritizer (str, optional): Specifies which template
+                prioritizer to use. (default: {'reaxys'})
+            precursor_prioritizer (str, optional): Specify precursor prioritizer
+                to be used. (default: {'relevanceheuristic'})
+            fast_filter (str, optional): Specify fast filter to be used for
+                scoring reactions. (default: {'default'})
+            pathway_ranker (method, optional): Provide a method for ranking and
+                clustering pathways. Uses ``PathwayRanker`` if unspecified.
+            kwargs (optional): Provide additional options for configuring
+                tree builder job. Options are also set by ``build_tree``.
+        """
 
         self.tree = nx.DiGraph()  # directed graph
 
@@ -40,6 +77,7 @@ class MCTS:
         self.pricer = pricer or self.load_pricer(use_db)
         self.chemhistorian = chemhistorian or self.load_chemhistorian(use_db)
         self.scscorer = scscorer or self.load_scscorer(pricer=self.pricer)
+        self.pathway_ranker = pathway_ranker  # Loaded during path enumeration if needed
 
         # If template prioritizer or fast filter are provided, don't load them
         if template_prioritizer is not None and not isinstance(template_prioritizer, str):
@@ -238,6 +276,15 @@ class MCTS:
     def get_buyable_paths(self, target, **kwargs):
         """
         Build retrosynthesis tree and return paths to buyable precursors.
+
+        Args:
+            target (str): SMILES of target chemical
+            kwargs (optional): Additional configuration options
+
+        Returns:
+            trees (list of dict): List of synthetic routes as networkx json
+            tree_status ((int, int, int)): Result of ``tree_status``.
+            graph (dict): Full explored graph as networkx node link json
         """
         self.build_tree(target, **kwargs)
         paths = self.enumerate_paths(**kwargs)
@@ -730,16 +777,19 @@ class MCTS:
                 bool(and_criteria) and all(local_dict[criteria]() for criteria in and_criteria))
 
     def enumerate_paths(self, path_format='json', json_format='treedata', sorting_metric='plausibility',
-                        validate_paths=True, **kwargs):
+                        validate_paths=True, max_depth=None, max_trees=None, pathway_ranker=None, **kwargs):
         """
         Return list of paths to buyables starting from the target node.
 
         Args:
-            path_format (str): pathway output format, supports 'graph' or 'json'
-            json_format (str): networkx json format, supports 'treedata' or 'nodelink'
-            sorting_metric (str): how pathways are sorted, supports 'plausibility',
-                'number_of_starting_materials', 'number_of_reactions'
-            validate_paths (bool): require all leaves to meet terminal criteria
+            path_format (str, optional): pathway output format, supports 'graph' or 'json'
+            json_format (str, optional): networkx json format, supports 'treedata' or 'nodelink'
+            sorting_metric (str, optional): how pathways are sorted, supports 'plausibility',
+                'number_of_starting_materials', 'number_of_reactions', 'score'
+            validate_paths (bool, optional): require all leaves to meet terminal criteria
+            max_depth (int, optional): max tree depth (i.e number of reaction steps)
+            max_trees (int, optional): max number of trees to return
+            pathway_ranker (method, optional): method used to score and cluster trees
 
         Returns:
             list of paths in specified format
@@ -747,13 +797,18 @@ class MCTS:
         # Resolve template data before doing any node duplication
         self.update_reaction_data()
 
+        if self.return_first:
+            kwargs['score_trees'] = kwargs['cluster_trees'] = False
+
         self.paths, self.target_uuid = nx_graph_to_paths(
             self.tree,
             self.target,
-            max_depth=self.max_depth,
-            max_trees=self.max_trees,
+            max_depth=max_depth or self.max_depth,
+            max_trees=max_trees or self.max_trees,
             sorting_metric=sorting_metric,
             validate_paths=validate_paths,
+            pathway_ranker=pathway_ranker or self.pathway_ranker,
+            **kwargs
         )
 
         MyLogger.print_and_log('Found {0} paths to buyable chemicals.'.format(len(self.paths)), treebuilder_loc)

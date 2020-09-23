@@ -60,6 +60,7 @@ class MCTS:
                  max_branching=20, max_depth=3, expansion_time=60,
                  chemhistorian=None, nproc=8, num_active_pathways=None, template_set='reaxys',
                  template_prioritizer='reaxys', precursor_prioritizer='relevanceheuristic', fast_filter='default',
+                 pathway_ranker=None,
                  **kwargs):
         """
         Initialization of an object of the MCTS class.
@@ -105,6 +106,8 @@ class MCTS:
                 to be used. (default: {'relevanceheuristic'})
             fast_filter (str, optional): Specify fast filter to be used for
                 scoring reactions. (default: {'default'})
+            pathway_ranker (method, optional): Provide a method for ranking and
+                clustering pathways. Uses ``PathwayRanker`` if unspecified.
         """
 
         if 'chiral' in kwargs and not kwargs['chiral']:
@@ -143,6 +146,7 @@ class MCTS:
         # The template prioritizer and fast filter are TF models which must be loaded in each child process
         self.template_prioritizer = template_prioritizer
         self.fast_filter = fast_filter
+        self.pathway_ranker = pathway_ranker  # Loaded during path enumeration if needed
 
         # Initialize vars, reset dicts, etc.
         self.reset(soft_reset=False)
@@ -1090,6 +1094,7 @@ class MCTS:
                           template_prioritizer='reaxys',
                           template_set='reaxys',
                           buyables_source=None,
+                          pathway_ranker=None,
                           **kwargs):
         """Returns trees with path ending in buyable chemicals.
 
@@ -1148,14 +1153,14 @@ class MCTS:
                 (default: {'reaxys'})
             buyables_source (str or list, optional): Specifies source of buyables
                 data to use. Will use all available data if not provided.
+            pathway_ranker (method, optional): Provide a method for ranking and
+                clustering pathways. Uses ``PathwayRanker`` if unspecified.
             **kwargs: Additional optional arguments.
 
         Returns:
-            ((int, int, dict), list of dict):
-                tree_status ((int, int, dict)): Result of tree_status().
-
-                trees (list of dict): List of dictionaries, where each dictionary
-                    defines a synthetic route.
+            trees (list of dict): List of synthetic routes as networkx json
+            tree_status ((int, int, int)): Result of ``tree_status``.
+            graph (dict): Full explored graph as networkx node link json
         """
         self.smiles = smiles
         self.max_depth = max_depth
@@ -1179,6 +1184,7 @@ class MCTS:
         self.sort_trees_by = sort_trees_by
         self.template_prioritizer = template_prioritizer
         self.template_set = template_set
+        self.pathway_ranker = pathway_ranker
 
         known_bad_reactions = known_bad_reactions or []
         forbidden_molecules = forbidden_molecules or []
@@ -1197,6 +1203,9 @@ class MCTS:
                         forbidden_molecules=forbidden_molecules,
                         return_first=return_first,
                         )
+
+        if return_first:
+            kwargs['score_trees'] = kwargs['cluster_trees'] = False
 
         paths = self.enumerate_paths(**kwargs)
         status = self.tree_status()
@@ -1308,9 +1317,9 @@ class MCTS:
         Return list of paths to buyables starting from the target node.
 
         Args:
-            path_format (str): pathway output format, supports 'graph' or 'json'
-            json_format (str): networkx json format, supports 'treedata' or 'nodelink'
-            validate_paths (bool): require all leaves to meet terminal criteria
+            path_format (str, optional): pathway output format, supports 'graph' or 'json'
+            json_format (str, optional): networkx json format, supports 'treedata' or 'nodelink'
+            validate_paths (bool, optional): require all leaves to meet terminal criteria
 
         Returns:
             list of paths in specified format
@@ -1324,6 +1333,8 @@ class MCTS:
             max_trees=self.max_trees,
             sorting_metric=self.sort_trees_by,
             validate_paths=validate_paths,
+            pathway_ranker=self.pathway_ranker,
+            **kwargs
         )
 
         MyLogger.print_and_log('Found {0} paths to buyable chemicals.'.format(len(self.paths)), treebuilder_loc)

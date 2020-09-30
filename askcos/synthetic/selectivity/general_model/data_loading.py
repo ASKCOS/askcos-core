@@ -1,26 +1,15 @@
-#import tensorflow as tf
-from tensorflow.keras.utils import Sequence
 import numpy as np
-from random import shuffle
 
 from askcos.synthetic.selectivity.mol_graph import smiles2graph_pr, pack1D, pack2D, pack2D_withidx, \
-    get_mask, binary_features_batch
-from askcos import global_config as gc
+    get_mask, binary_features_batch, smiles2graph_pr_qm, pack2D_cores
 
-atom_fdim = gc.GEN_SELECTIVITY['atom_fdim']
 
-def _data_generation(smiles_tmp, products_tmp):
+def gnn_data_generation(smiles, products):
 
-    smiles_extend = []
-    prs_extend = []
-    labels_extend = []
-    for r,ps in zip(smiles_tmp, products_tmp):
-        size = len(ps.split('.'))
-        prs_extend.extend([smiles2graph_pr(p, r, idxfunc=lambda x: x.GetIdx(), core_buffer=2, atom_fdim=atom_fdim)
-                           for p in ps.split('.')])
-        smiles_extend.extend([r]*size)
-
-        labels_extend.extend([1]+[0]*(size-1))
+    size = len(products.split('.'))
+    prs_extend = [smiles2graph_pr(p, smiles, idxfunc=lambda x: x.GetIdx(), core_buffer=2)
+                  for p in products.split('.')]
+    smiles_extend = [smiles] * size
 
     res_extend, prods_extend = zip(*prs_extend)
     # graph_inputs for reactants
@@ -35,28 +24,24 @@ def _data_generation(smiles_tmp, products_tmp):
                           pack2D_withidx(gbond_list), pack1D(nb_list), get_mask(fatom_list),
                           pack1D(core_mask))
 
-    return (res_graph_inputs + prods_graph_inputs), np.array(labels_extend).astype('int32')
+    return res_graph_inputs + prods_graph_inputs
 
 
-class GraphDataLoader(Sequence):
-    def __init__(self, smiles, products, batch_size, shuffle=True):
-        self.smiles = smiles
-        self.products = products
-        self.batch_size = batch_size
-        self.shuffle = shuffle
-        self.on_epoch_end()
 
-    def __len__(self):
-        return int(np.ceil(len(self.smiles)/self.batch_size))
+def qm_gnn_data_generation(smiles, products, reagents, qm_descriptors):
 
-    def __getitem__(self, index):
-        smiles_tmp = self.smiles[index*self.batch_size:(index+1)*self.batch_size]
-        products_tmp = self.products[index*self.batch_size:(index+1)*self.batch_size]
-        x, y = _data_generation(smiles_tmp, products_tmp)
-        return x, y
+    prs_extend = [smiles2graph_pr_qm(smiles, p, reagents, qm_descriptors) for p in products.split('.')]
 
-    def on_epoch_end(self):
-        if self.shuffle:
-            zipped = list(zip(self.smiles, self.products))
-            shuffle(zipped)
-            self.smiles, self.products = zip(*zipped)
+    fatom_list, fatom_qm_list, fbond_list, gatom_list, gbond_list, nb_list, cores, connect, \
+    rg_fatom_list, rg_fbond_list, rg_gatom_list, rg_gbond_list, rg_nb_list = zip(*prs_extend)
+
+    res_graph_inputs = (pack2D(fatom_list), pack2D(fbond_list), pack2D_withidx(gatom_list),
+                        pack2D_withidx(gbond_list), pack1D(nb_list), get_mask(fatom_list),
+                        np.stack([pack2D_cores(cores)] * len(prs_extend)),  # trick tensorflow
+                        pack2D(fatom_qm_list),
+                        np.stack([np.concatenate(connect, axis=0)] * len(prs_extend)),  # trick tensorflow
+                        pack2D(rg_fatom_list), pack2D(rg_fbond_list), pack2D_withidx(rg_gatom_list),
+                        pack2D_withidx(rg_gbond_list), pack1D(rg_nb_list), get_mask(rg_fatom_list),
+                        )
+
+    return res_graph_inputs

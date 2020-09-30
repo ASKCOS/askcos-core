@@ -1,4 +1,6 @@
 import os
+import pandas as pd
+from numpy import array
 
 # Output debugging statements
 DEBUG = False
@@ -70,6 +72,7 @@ forward_scoring = network
 data_path = os.path.join(os.path.dirname(__file__),'data')
 local_db_dumps = os.path.join(data_path, 'local_db_dumps')
 models_path = os.path.join(data_path, 'models')
+scalers_path = os.path.join(data_path, 'scalers')
 
 fingerprint_bits = 256
 reaction_fingerprint_bits = 2048
@@ -171,12 +174,26 @@ SELECTIVITY = {
 }
 
 GEN_SELECTIVITY = {
-    'model_path': os.path.join(models_path, 'selectivity', 'general_selectivity', 'best_model.hdf5'),
-    'initializer': '[CH4:1]>>[CH4:1]',
-    'atom_fdim': 82,
-    'bond_fdim': 6,
-    'max_nb': 10,
-    'binary_fdim': 11,
+    'model_path': {'GNN': os.path.join(models_path, 'selectivity', 'general_selectivity', 'GNN_best_model.hdf5'),
+                   'QM_GNN': os.path.join(models_path, 'selectivity', 'general_selectivity', 'QM_GNN_best_model.hdf5'),
+                   },
+    'initializer': '[CH4:1]>ClC(Cl)Cl>[CH4:1]',
+    'scalers': os.path.join(scalers_path, 'QM_desc.pickle'),
+    'initializer_qm': pd.DataFrame(
+        {'[CH4:1]': {'partial_charge': array([0.2840435 , 0.42871496, 0.42871496, 0.42871496, 0.42871493]),
+                   'fukui_neu': array([0.40352857, 0.27556148, 0.27556148, 0.27556148, 0.27556148]),
+                   'fukui_elec': array([0.69178367, 0.3259021 , 0.3259021 , 0.3259021 , 0.3259021 ]),
+                   'NMR': array([1.7733233, 0.705616 , 0.705616 , 0.7056161, 0.7056161]),
+                   'bond_order_matrix': array([[0.        , 0.94360828, 0.94360828, 0.94360828, 0.94360828],
+                                               [0.94360828, 0.        , 0.        , 0.        , 0.        ],
+                                               [0.94360828, 0.        , 0.        , 0.        , 0.        ],
+                                               [0.94360828, 0.        , 0.        , 0.        , 0.        ],
+                                               [0.94360828, 0.        , 0.        , 0.        , 0.        ]]),
+                   'distance_matrix': array([[0.       , 1.0847981, 1.0847981, 1.0847981, 1.0847981],
+                                             [1.0847981, 0.       , 0.       , 0.       , 0.       ],
+                                             [1.0847981, 0.       , 0.       , 0.       , 0.       ],
+                                             [1.0847981, 0.       , 0.       , 0.       , 0.       ],
+                                             [1.0847981, 0.       , 0.       , 0.       , 0.       ]])}}).T
 }
 
 PATHWAY_RANKER = {

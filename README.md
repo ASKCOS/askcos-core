@@ -76,3 +76,8 @@ Using the coarse "fast filter" (binary classifier) for evaluating reaction plaus
 ```
 askcos/synthetic/evaluation/fast_filter.py
 ```
+
+Predicting regio-selectivity for a given atom-mapped reaction:
+```angular2
+askcos/synthetic/selectivity/general_selectivity.py
+```

@@ -195,8 +195,7 @@ class TemplateNeuralNetScorer(Scorer):
                 self.solvent_name_to_smiles = pickle.load(fid)
                 self.solvent_smiles_to_params = pickle.load(fid)
         else:
-            db_client = MongoClient(gc.MONGO['path'], gc.MONGO[
-                            'id'], connect=gc.MONGO['connect'])
+            db_client = MongoClient(**gc.MONGO)
             db = db_client[gc.SOLVENTS['database']]
             SOLVENT_DB = db[gc.SOLVENTS['collection']]
             for doc in SOLVENT_DB.find():

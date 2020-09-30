@@ -91,7 +91,7 @@ def context_to_edit(context, solvent_name_to_smiles, solvent_smiles_to_params):
 
 def contexts_to_edits(contexts):
     '''Set multiple contexts to try at once'''
-    db_client = MongoClient(gc.MONGO['path'], gc.MONGO['id'], connect = gc.MONGO['connect'])
+    db_client = MongoClient(**gc.MONGO)
     db = db_client[gc.SOLVENTS['database']]
     SOLVENT_DB = db[gc.SOLVENTS['collection']]
     contexts_edits = []

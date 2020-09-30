@@ -11,12 +11,7 @@ from askcos.utilities.buyable.pricer import Pricer
 
 def db_available():
     """Check if a mongo db instance is available."""
-    db_client = MongoClient(
-        gc.MONGO['path'],
-        gc.MONGO['id'],
-        connect=gc.MONGO['connect'],
-        serverSelectionTimeoutMS=1000,
-    )
+    db_client = MongoClient(serverSelectionTimeoutMS=1000, **gc.MONGO)
 
     try:
         db_client.server_info()

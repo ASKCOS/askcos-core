@@ -81,3 +81,8 @@ Predicting regio-selectivity for a given atom-mapped reaction:
 ```angular2
 askcos/synthetic/selectivity/general_selectivity.py
 ```
+
+Predicting reactivity descriptors for a given list of molecules:
+```angular2
+askcos/synthetic/descriptors/descriptors.py
+```

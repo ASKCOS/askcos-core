@@ -199,3 +199,7 @@ GEN_SELECTIVITY = {
 PATHWAY_RANKER = {
     'model_path': os.path.join(models_path, 'pathway_ranker', 'treeLSTM512-fp2048.pt')
 }
+
+DESCRIPTORS = {
+    'model_path': os.path.join(models_path, 'descriptors', 'QM_137k.pt')
+}

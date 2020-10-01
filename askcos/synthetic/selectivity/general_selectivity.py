@@ -10,6 +10,8 @@ from askcos.synthetic.selectivity.general_model.data_loading import gnn_data_gen
 from askcos.synthetic.selectivity.general_model.loss import wln_loss
 from askcos.synthetic.selectivity.general_model.models import WLNReactionClassifier
 from askcos.synthetic.selectivity.general_model.qm_models import QMWLNPairwiseAtomClassifier
+from askcos.synthetic.atom_mapper.wln_mapper import WLN_AtomMapper
+
 
 GNN_model_path = gc.GEN_SELECTIVITY['model_path']['GNN']
 QM_GNN_model_path = gc.GEN_SELECTIVITY['model_path']['QM_GNN']
@@ -161,6 +163,8 @@ class GeneralSelectivityPredictor:
         out = tuple([float(x) for x in softmax(out)])
 
         return out
+
+    def predict(self, smiles ):
 
 
 # for testing purposes

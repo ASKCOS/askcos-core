@@ -178,7 +178,7 @@ GEN_SELECTIVITY = {
                    'QM_GNN': os.path.join(models_path, 'selectivity', 'general_selectivity', 'QM_GNN_best_model.hdf5'),
                    },
     'initializer': '[CH4:1]>ClC(Cl)Cl>[CH4:1]',
-    'scalers': os.path.join(scalers_path, 'QM_desc.pickle'),
+    'scalers': os.path.join(scalers_path, 'QM_desc_selec.pickle'),
     'initializer_qm': pd.DataFrame(
         {'[CH4:1]': {'partial_charge': array([0.2840435 , 0.42871496, 0.42871496, 0.42871496, 0.42871493]),
                    'fukui_neu': array([0.40352857, 0.27556148, 0.27556148, 0.27556148, 0.27556148]),

@@ -699,7 +699,7 @@ def bond_to_label(bond):
 
     return '{}{}{}'.format(atoms[0], bond.GetSmarts(), atoms[1])
 
-def extract_from_reaction(reaction, return_dict):
+def extract_from_reaction(reaction):
     reactants = mols_from_smiles_list(replace_deuterated(reaction['reactants']).split('.'))
     products = mols_from_smiles_list(replace_deuterated(reaction['products']).split('.'))
     # if rdkit cant understand molecule, return
@@ -810,21 +810,4 @@ def extract_from_reaction(reaction, return_dict):
 
     canonical = reactants_string + '>>' + products_string
 
-    # Load into RDKit
-    rxn = AllChem.ReactionFromSmarts(canonical)
-    if rxn.Validate()[1] != 0:
-        print('Could not validate reaction successfully')
-        print('ID: {}'.format(reaction['_id']))
-        print('canonical: {}'.format(canonical))
-        return {'reaction_id': reaction['_id']}
-
-    template = {
-        'reaction_smarts': canonical,
-        'intra_only': intra_only,
-        'dimer_only': dimer_only,
-        'reaction_id': reaction['_id'],
-        'necessary_reagent': extra_reactant_fragment,
-    }
-
-    return_dict['template'] = template
-    return template
+    return canonical

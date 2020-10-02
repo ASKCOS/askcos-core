@@ -206,7 +206,6 @@ class GeneralSelectivityPredictor:
             reaction = {'reactants': rsmi, 'products': psmi, '_id': 0}
             try:
                 template = extract_from_reaction(reaction)
-                template = template['reactants'] + '>>' + template['products']
                 rxnsmiles = apply_template(template, rxnsmiles)
             except Exception as e:
                 raise RuntimeError('Failed to find outcomes for the given reaction: {}'.format(e))
@@ -221,8 +220,6 @@ class GeneralSelectivityPredictor:
             raise ValueError("Selectivity mode is invalid")
 
         return selectivity
-
-
 
 
 # for testing purposes

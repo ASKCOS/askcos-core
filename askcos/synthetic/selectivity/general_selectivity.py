@@ -4,7 +4,7 @@ from scipy.special import softmax
 import pandas as pd
 import numpy as np
 from rdkit import Chem
-from rdchiral import template_extractor
+from askcos.utilities.template_extractor import extract_from_reaction
 from rdchiral.initialization import rdchiralReactants, rdchiralReaction
 from rdchiral.main import rdchiralRun
 
@@ -205,7 +205,7 @@ class GeneralSelectivityPredictor:
             rsmi, _, psmi = rxnsmiles.split('>')
             reaction = {'reactants': rsmi, 'products': psmi, '_id': 0}
             try:
-                template = template_extractor.extract_from_reaction(reaction)
+                template = extract_from_reaction(reaction)
                 template = template['reactants'] + '>>' + template['products']
                 rxnsmiles = apply_template(template, rxnsmiles)
             except Exception as e:
@@ -228,18 +228,6 @@ class GeneralSelectivityPredictor:
 # for testing purposes
 if __name__ == "__main__":
     predictor = GeneralSelectivityPredictor()
-    react = '[CH3:16][CH:17]([CH3:18])[CH2:19][O:20][c:21]1[cH:22][cH:23][nH:24][n:25]1.[CH3:1][C:2]([CH3:3])([CH3:4])[O:5][C:6](=[O:7])[c:8]1[cH:9][cH:10][c:11]([Cl:12])[n:13][c:14]1[Cl:15]>CCOC(C)=O.ClCCl.O.CN(C=O)C.[NaH]>[CH3:1][C:2]([CH3:3])([CH3:4])[O:5][C:6](=[O:7])[c:8]1[cH:9][cH:10][c:11](-[n:24]2[cH:23][cH:22][c:21]([O:20][CH2:19][CH:17]([CH3:16])[CH3:18])[n:25]2)[n:13][c:14]1[Cl:15].[CH3:1][C:2]([CH3:3])([CH3:4])[O:5][C:6](=[O:7])[c:8]1[cH:9][cH:10][c:11]([Cl:12])[n:13][c:14]1-[n:24]1[cH:23][cH:22][c:21]([O:20][CH2:19][CH:17]([CH3:16])[CH3:18])[n:25]1'
-    print(react)
-
     rawrxn = 'CC(COc1n[nH]cc1)C.CC(C)(OC(c1c(Cl)nc(Cl)cc1)=O)C>ClCCl.CN(C=O)C.O.CCOC(C)=O.[NaH]>CC(OC(c1ccc(n2ccc(OCC(C)C)n2)nc1Cl)=O)(C)C'
     res = predictor.predict(rawrxn)
     print(res)
-
-    import os
-    df = pd.read_pickle(os.path.join(gc.data_path, 'reactants_descriptors.pickle')).to_dict()
-    res = predictor.predict_qm_gnn(react, df)
-    print(res)      # result: (0.7517470717430115, 0.24825286865234375)
-    '''
-    res = predictor.predict_gnn(react)
-    print(res)      # result: (0.9944412708282471, 0.005558944307267666)
-    '''

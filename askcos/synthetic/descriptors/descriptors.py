@@ -13,7 +13,7 @@ from askcos import global_config as gc
 
 model_pt_path = gc.DESCRIPTORS['model_path']
 
-class ReactivityDescriptorHandler:
+class ReactivityDescriptor:
 
     def __init__(self):
         self.device = None
@@ -76,41 +76,24 @@ class ReactivityDescriptorHandler:
         bond_order = [x.tolist() for x in np.split(bond_order.flatten(), np.cumsum(np.array(n_bonds)))][:-1]
         bond_distance = [x.tolist() for x in np.split(bond_distance.flatten(), np.cumsum(np.array(n_bonds)))][:-1]
 
-        results = [{'smiles': s, 'partial_charge': pc, 'partial_neu': pn,
-                    'partial_elec': pe, 'NMR': nmr, 'bond_order': bo, 'bond_distance': bd}
+        results = [{'smiles': s, 'partial_charge': pc, 'fukui_neu': pn,
+                    'fukui_elec': pe, 'NMR': nmr, 'bond_order': bo, 'bond_length': bd}
                    for s, pc, pn, pe, nmr, bo, bd in zip(smiles, partial_charge, partial_neu,
                                                          partial_elec, NMR, bond_order, bond_distance)]
-
         return results
 
-_service = ReactivityDescriptorHandler()
+    def evaluate(self, smiles):
+        descriptors = self.inference(self.preprocess(smiles))
+        result = self.postprocess(smiles, descriptors)
 
-
-def handle(data, context):
-    if not _service.initialized:
-        _service.initialize(context)
-
-    if data is None:
-        return None
-
-    print(data)
-    if isinstance(data[0], str):
-        smiles = data
-    else:
-        smiles = data[0].get('data') or data[0].get('body')
-
-    outputs = _service.inference(_service.preprocess(smiles))
-    postprocess_inputs = {'smiles': smiles, 'descs': outputs}
-
-    return _service.postprocess(postprocess_inputs)
+        return result
 
 
 if __name__ == '__main__':
 
-    handler = ReactivityDescriptorHandler()
+    handler = ReactivityDescriptor()
 
     data = ['CCCC', 'CCC', 'CCCCC']
-    descriptors = handler.inference(handler.preprocess(data))
-    result = handler.postprocess(data, descriptors)
+    descriptors = handler.evaluate(data)
 
-    print(result)
+    print(descriptors)

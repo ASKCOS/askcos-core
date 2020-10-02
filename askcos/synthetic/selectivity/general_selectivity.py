@@ -4,6 +4,9 @@ from scipy.special import softmax
 import pandas as pd
 import numpy as np
 from rdkit import Chem
+from rdchiral import template_extractor
+from rdchiral.initialization import rdchiralReactants, rdchiralReaction
+from rdchiral.main import rdchiralRun
 
 from askcos import global_config as gc
 from askcos.synthetic.selectivity.general_model.data_loading import gnn_data_generation, qm_gnn_data_generation
@@ -11,6 +14,7 @@ from askcos.synthetic.selectivity.general_model.loss import wln_loss
 from askcos.synthetic.selectivity.general_model.models import WLNReactionClassifier
 from askcos.synthetic.selectivity.general_model.qm_models import QMWLNPairwiseAtomClassifier
 from askcos.synthetic.atom_mapper.wln_mapper import WLN_AtomMapper
+from askcos.synthetic.descriptors.descriptors import ReactivityDescriptor
 
 
 GNN_model_path = gc.GEN_SELECTIVITY['model_path']['GNN']
@@ -38,6 +42,8 @@ def _bond_to_matrix(smiles, bond_vector):
 
 def _min_max_normalize(df, scalers):
 
+    df = pd.DataFrame(df).applymap(np.array)
+
     for column in GLOBAL_SCALE:
         scaler = scalers[column]
         df[column] = df[column].apply(lambda x: scaler.transform(x.reshape(-1, 1)).reshape(-1))
@@ -55,8 +61,9 @@ def _min_max_normalize(df, scalers):
     df['bond_order_matrix'] = df.apply(lambda x: _bond_to_matrix(x['smiles'], x['bond_order']), axis=1)
     df['distance_matrix'] = df.apply(lambda x: _bond_to_matrix(x['smiles'], x['bond_length']), axis=1)
 
-    df = df[['smiles', 'partial_charge', 'fukui_neu', 'fukui_elec', 'NMR', 'bond_order_matrix', 'distance_matrix']]
-    df = df.set_index('smiles')
+    df = df[['smiles', 'partial_charge', 'fukui_neu', 'fukui_elec', 'NMR', 'bond_order_matrix', 'distance_matrix']].set_index('smiles')
+
+    df = df.applymap(lambda x: x.tolist()).T.to_dict()
 
     return df
 
@@ -71,9 +78,25 @@ def _get_atoms(smiles):
     return atoms
 
 
+def apply_template(template, rxn_smiles):
+
+    rt, _, pt = template.split('>')
+    template = '({0})>>({1})'.format(rt, pt)
+    r, rg, p = rxn_smiles.split('>')
+    precursor = rdchiralReactants(r)
+    forward_rxn = rdchiralReaction(str(template))
+
+    outcomes = rdchiralRun(forward_rxn, precursor, return_mapped=True)
+    outcomes = list([x[0] for x in outcomes[1].values()])
+    reactants = Chem.MolToSmiles(precursor.reactants)
+
+    return '>'.join([reactants, rg, '.'.join(outcomes)])
+
+
 class GeneralSelectivityPredictor:
 
-    def __init__(self, depth=4, hidden_size=200, core_buffer=2):
+    def __init__(self, depth=4, hidden_size=200,
+                 atom_mapper=WLN_AtomMapper().evaluate, descriptor_predictor=ReactivityDescriptor().evaluate):
         
         self.depth = depth
         self.hidden_size = hidden_size
@@ -82,6 +105,9 @@ class GeneralSelectivityPredictor:
         self.GNN_model = None
         self.QM_GNN_model = None
         self.model = None
+
+        self.atom_mapper = atom_mapper
+        self.descriptor_predictor = descriptor_predictor
 
         #self.build()
         
@@ -164,19 +190,56 @@ class GeneralSelectivityPredictor:
 
         return out
 
-    def predict(self, smiles ):
+    def predict(self, rxnsmiles, mapped=False, mode='qm-gnn', outcomes_included=False):
+
+        if not mapped:
+            rsmi, rgsmi, psmi = rxnsmiles.split('>')
+            [rsmi_am, psmi_am] = self.atom_mapper(rsmi + '>>' + psmi).split('>>')
+
+            if rsmi_am and psmi_am:
+                rxnsmiles = '>'.join([rsmi_am, rgsmi, psmi_am])
+            else:
+                raise RuntimeError('Cannot find map atom number for the given unmapped reaction.')
+
+        if not outcomes_included:
+            rsmi, _, psmi = rxnsmiles.split('>')
+            reaction = {'reactants': rsmi, 'products': psmi, '_id': 0}
+            try:
+                template = template_extractor.extract_from_reaction(reaction)
+                template = template['reactants'] + '>>' + template['products']
+                rxnsmiles = apply_template(template, rxnsmiles)
+            except Exception as e:
+                raise RuntimeError('Failed to find outcomes for the given reaction: {}'.format(e))
+
+        if mode == 'qm-gnn':
+            rsmis = rxnsmiles.split('>')[0].split('.')
+            descriptors = self.descriptor_predictor(rsmis)
+            selectivity = self.predict_qm_gnn(rxnsmiles, descriptors)
+        elif mode == 'gnn':
+            selectivity = self.predict_gnn(rxnsmiles)
+        else:
+            raise ValueError("Selectivity mode is invalid")
+
+        return selectivity
+
+
 
 
 # for testing purposes
 if __name__ == "__main__":
     predictor = GeneralSelectivityPredictor()
-    react = '[Br:1][Br:2].[NH2:3][c:4]1[n:5][cH:6][n:7][c:8]2[nH:9][cH:10][n:11][c:12]12>O>[Br:2][c:10]1[nH:9][c:8]2[n:7][cH:6][n:5][c:4]([NH2:3])[c:12]2[n:11]1.[Br:2][c:6]1[n:5][c:4]([NH2:3])[c:12]2[c:8]([n:7]1)[nH:9][cH:10][n:11]2'
+    react = '[CH3:16][CH:17]([CH3:18])[CH2:19][O:20][c:21]1[cH:22][cH:23][nH:24][n:25]1.[CH3:1][C:2]([CH3:3])([CH3:4])[O:5][C:6](=[O:7])[c:8]1[cH:9][cH:10][c:11]([Cl:12])[n:13][c:14]1[Cl:15]>CCOC(C)=O.ClCCl.O.CN(C=O)C.[NaH]>[CH3:1][C:2]([CH3:3])([CH3:4])[O:5][C:6](=[O:7])[c:8]1[cH:9][cH:10][c:11](-[n:24]2[cH:23][cH:22][c:21]([O:20][CH2:19][CH:17]([CH3:16])[CH3:18])[n:25]2)[n:13][c:14]1[Cl:15].[CH3:1][C:2]([CH3:3])([CH3:4])[O:5][C:6](=[O:7])[c:8]1[cH:9][cH:10][c:11]([Cl:12])[n:13][c:14]1-[n:24]1[cH:23][cH:22][c:21]([O:20][CH2:19][CH:17]([CH3:16])[CH3:18])[n:25]1'
     print(react)
 
+    rawrxn = 'CC(COc1n[nH]cc1)C.CC(C)(OC(c1c(Cl)nc(Cl)cc1)=O)C>ClCCl.CN(C=O)C.O.CCOC(C)=O.[NaH]>CC(OC(c1ccc(n2ccc(OCC(C)C)n2)nc1Cl)=O)(C)C'
+    res = predictor.predict(rawrxn)
+    print(res)
+
     import os
-    df = pd.read_pickle(os.path.join(gc.data_path, 'reactants_descriptors.pickle'))
+    df = pd.read_pickle(os.path.join(gc.data_path, 'reactants_descriptors.pickle')).to_dict()
     res = predictor.predict_qm_gnn(react, df)
     print(res)      # result: (0.7517470717430115, 0.24825286865234375)
-
+    '''
     res = predictor.predict_gnn(react)
     print(res)      # result: (0.9944412708282471, 0.005558944307267666)
+    '''

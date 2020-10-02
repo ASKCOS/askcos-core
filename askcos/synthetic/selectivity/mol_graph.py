@@ -165,24 +165,24 @@ def _mol2graph_qm(rxn_smiles, qm_descriptors=None, qf_feature=1):
         mol = Chem.MolFromSmiles(smiles)
         fatom_index_mol = {a.GetIntProp('molAtomMapNumber'): a.GetIdx() for a in mol.GetAtoms()}
 
-        qm_series = qm_descriptors.loc[smiles]
+        qm_series = qm_descriptors[smiles]
 
-        partial_charge = qm_series['partial_charge'].reshape(-1, 1)
+        partial_charge = np.array(qm_series['partial_charge']).reshape(-1, 1)
         partial_charge = np.apply_along_axis(rbf_expansion, -1, partial_charge, 0.2, 0.05 / qf_feature, 10 * qf_feature)
 
-        fukui_elec = qm_series['fukui_elec'].reshape(-1, 1)
+        fukui_elec = np.array(qm_series['fukui_elec']).reshape(-1, 1)
         fukui_elec = np.apply_along_axis(rbf_expansion, -1, fukui_elec, 0, 0.02 / qf_feature, 10 * qf_feature)
 
-        fukui_neu = qm_series['fukui_neu'].reshape(-1, 1)
+        fukui_neu = np.array(qm_series['fukui_neu']).reshape(-1, 1)
         fukui_neu = np.apply_along_axis(rbf_expansion, -1, fukui_neu, 0, 0.03 / qf_feature, 10 * qf_feature)
 
-        nmr = qm_series['NMR'].reshape(-1, 1)
+        nmr = np.array(qm_series['NMR']).reshape(-1, 1)
         nmr = np.apply_along_axis(rbf_expansion, -1, nmr, 0.2, 0.08 / qf_feature, 10 * qf_feature)
 
-        bond_index = np.expand_dims(qm_series['bond_order_matrix'], -1)
+        bond_index = np.expand_dims(np.array(qm_series['bond_order_matrix']), -1)
         bond_index = np.apply_along_axis(rbf_expansion, -1, bond_index, 0.5, 0.1 / qf_feature, 25 * qf_feature)
 
-        bond_distance = np.expand_dims(qm_series['distance_matrix'], -1)
+        bond_distance = np.expand_dims(np.array(qm_series['distance_matrix']), -1)
         bond_distance = np.apply_along_axis(rbf_expansion, -1, bond_distance, 0.5, 0.05 / qf_feature, 40 * qf_feature)
 
         atom_qm_descriptor = np.concatenate([partial_charge, fukui_elec, fukui_neu, nmr], axis=-1)
@@ -238,8 +238,8 @@ def _mol2graph_qm(rxn_smiles, qm_descriptors=None, qf_feature=1):
             raise Exception(Chem.MolToSmiles(mol))
         rg_atom_nb[a1,rg_num_nbs[a1]] = a2
         rg_atom_nb[a2,rg_num_nbs[a2]] = a1
-        rg_atom_nb[a1,rg_num_nbs[a1]] = idx
-        rg_atom_nb[a2,rg_num_nbs[a2]] = idx
+        rg_bond_nb[a1,rg_num_nbs[a1]] = idx
+        rg_bond_nb[a2,rg_num_nbs[a2]] = idx
         rg_num_nbs[a1] += 1
         rg_num_nbs[a2] += 1
 

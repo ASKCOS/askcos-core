@@ -7,7 +7,7 @@ from argparse import Namespace
 import torch
 import torch.nn as nn
 
-from nn_utils import index_select_ND
+from askcos.synthetic.descriptors.nn_utils import index_select_ND
 
 
 class MPNEncoder(nn.Module):

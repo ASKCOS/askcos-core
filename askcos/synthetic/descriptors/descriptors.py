@@ -80,7 +80,9 @@ class ReactivityDescriptor:
                     'fukui_elec': pe, 'NMR': nmr, 'bond_order': bo, 'bond_length': bd}
                    for s, pc, pn, pe, nmr, bo, bd in zip(smiles, partial_charge, partial_neu,
                                                          partial_elec, NMR, bond_order, bond_distance)]
-        return results
+
+        # FIXME the torch server currently doesn't support batch input, to be consitent only allow single smiles here.
+        return results[0]
 
     def evaluate(self, smiles):
         smiles = smiles.split('.')

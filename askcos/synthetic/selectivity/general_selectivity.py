@@ -179,6 +179,8 @@ class GeneralSelectivityPredictor:
         :return:
         """
 
+        print(qm_df)
+
         reactants, reagent, products = smiles.split('>')
 
         self.model = QMWLNPairwiseAtomClassifier(self.hidden_size)
@@ -217,8 +219,8 @@ class GeneralSelectivityPredictor:
                 raise RuntimeError('Failed to find outcomes for the given reaction: {}'.format(e))
 
         if mode == 'qm-gnn':
-            rsmis = rxnsmiles.split('>')[0]
-            descriptors = self.descriptor_predictor(rsmis)
+            rsmis = rxnsmiles.split('>')[0].split('.')
+            descriptors = [self.descriptor_predictor(rsmi) for rsmi in rsmis]
             selectivity = self.predict_qm_gnn(rxnsmiles, descriptors)
         elif mode == 'gnn':
             selectivity = self.predict_gnn(rxnsmiles)

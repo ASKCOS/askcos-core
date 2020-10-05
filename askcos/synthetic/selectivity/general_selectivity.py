@@ -217,7 +217,7 @@ class GeneralSelectivityPredictor:
                 raise RuntimeError('Failed to find outcomes for the given reaction: {}'.format(e))
 
         if mode == 'qm-gnn':
-            rsmis = rxnsmiles.split('>')[0].split('.')
+            rsmis = rxnsmiles.split('>')[0]
             descriptors = self.descriptor_predictor(rsmis)
             selectivity = self.predict_qm_gnn(rxnsmiles, descriptors)
         elif mode == 'gnn':

@@ -83,6 +83,7 @@ class ReactivityDescriptor:
         return results
 
     def evaluate(self, smiles):
+        smiles = smiles.split('.')
         descriptors = self.inference(self.preprocess(smiles))
         result = self.postprocess(smiles, descriptors)
 
@@ -93,7 +94,7 @@ if __name__ == '__main__':
 
     handler = ReactivityDescriptor()
 
-    data = ['CCCC', 'CCC', 'CCCCC']
+    data = 'CCCC.CCC.CCCCC'
     descriptors = handler.evaluate(data)
 
     print(descriptors)

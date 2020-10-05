@@ -13,8 +13,6 @@ from askcos.synthetic.selectivity.general_model.data_loading import gnn_data_gen
 from askcos.synthetic.selectivity.general_model.loss import wln_loss
 from askcos.synthetic.selectivity.general_model.models import WLNReactionClassifier
 from askcos.synthetic.selectivity.general_model.qm_models import QMWLNPairwiseAtomClassifier
-from askcos.synthetic.atom_mapper.wln_mapper import WLN_AtomMapper
-from askcos.synthetic.descriptors.descriptors import ReactivityDescriptor
 
 
 GNN_model_path = gc.GEN_SELECTIVITY['model_path']['GNN']
@@ -96,8 +94,16 @@ def apply_template(template, rxn_smiles):
 class GeneralSelectivityPredictor:
 
     def __init__(self, depth=4, hidden_size=200,
-                 atom_mapper=WLN_AtomMapper().evaluate, descriptor_predictor=ReactivityDescriptor().evaluate):
-        
+                 atom_mapper=None, descriptor_predictor=None):
+
+        if atom_mapper is None:
+            from askcos.synthetic.atom_mapper.wln_mapper import WLN_AtomMapper
+            atom_mapper = WLN_AtomMapper().evaluate
+
+        if descriptor_predictor is None:
+            from askcos.synthetic.descriptors.descriptors import ReactivityDescriptor
+            descriptor_predictor = ReactivityDescriptor().evaluate
+
         self.depth = depth
         self.hidden_size = hidden_size
 

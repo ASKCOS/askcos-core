@@ -13,6 +13,7 @@ from askcos.synthetic.selectivity.general_model.data_loading import gnn_data_gen
 from askcos.synthetic.selectivity.general_model.loss import wln_loss
 from askcos.synthetic.selectivity.general_model.models import WLNReactionClassifier
 from askcos.synthetic.selectivity.general_model.qm_models import QMWLNPairwiseAtomClassifier
+from askcos.utilities import parsing
 
 
 GNN_model_path = gc.GEN_SELECTIVITY['model_path']['GNN']
@@ -227,12 +228,19 @@ class GeneralSelectivityPredictor:
         else:
             raise ValueError("Selectivity mode is invalid")
 
-        return selectivity
+        _, _, products = rxnsmiles.split('>')
+        products = [parsing.canonicalize_mapped_smiles(s) for s in products.split('.')]
+
+        selectivity, products = zip(*sorted(zip(selectivity, products)))
+
+        results = [{'smiles': prod, 'prob': prob} for prod, prob in zip (products, selectivity)]
+
+        return results
 
 
 # for testing purposes
 if __name__ == "__main__":
     predictor = GeneralSelectivityPredictor()
     rawrxn = 'CC(COc1n[nH]cc1)C.CC(C)(OC(c1c(Cl)nc(Cl)cc1)=O)C>ClCCl.CN(C=O)C.O.CCOC(C)=O.[NaH]>CC(OC(c1ccc(n2ccc(OCC(C)C)n2)nc1Cl)=O)(C)C'
-    res = predictor.predict(rawrxn)
+    res = predictor.predict(rawrxn)         # (0.9809687733650208, 0.019030507653951645)
     print(res)

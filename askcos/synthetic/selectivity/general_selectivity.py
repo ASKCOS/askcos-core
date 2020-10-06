@@ -231,9 +231,9 @@ class GeneralSelectivityPredictor:
         _, _, products = rxnsmiles.split('>')
         products = [parsing.canonicalize_mapped_smiles(s) for s in products.split('.')]
 
-        selectivity, products = zip(*sorted(zip(selectivity, products)))
+        selectivity, products = zip(*sorted(zip(selectivity, products), reverse=True))
 
-        results = [{'smiles': prod, 'prob': prob} for prod, prob in zip (products, selectivity)]
+        results = [{'smiles': prod, 'prob': prob, 'rank': i+1} for i, prod, prob in enumerate(zip(products, selectivity))]
 
         return results
 

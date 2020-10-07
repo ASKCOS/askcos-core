@@ -53,6 +53,7 @@ class NeuralNetContextRecommender(ContextRecommender):
         self.max_total_context = max_contexts
         self.max_context = 2
         self.fp_size = 2048
+        
 
         self.session = tf.Session()
         tf.keras.backend.set_session(self.session)
@@ -73,7 +74,7 @@ class NeuralNetContextRecommender(ContextRecommender):
         """
         # for the neural net model, info path points to the encoders
         self.load_nn_model(model_path, info_path, weights_path)
-        self.load_EHSdictionary(os.path.join(gc.data_path,'solvents','slv_EHSdict.csv'))
+        self.load_EHSdictionary(os.path.join(gc.data_path, 'solvents', 'slv_EHSdict.csv'))
         MyLogger.print_and_log(
             'Nerual network context recommender has been loaded.', contextRecommender_loc)
 
@@ -217,7 +218,7 @@ class NeuralNetContextRecommender(ContextRecommender):
             top_combo_scores = list(map(float, top_combo_scores))
 
             if return_scores:
-                return (self.contexts_EHS_scores(top_combos[:n]),top_combo_scores[:n])
+                return (self.contexts_EHS_scores(top_combos[:n]), top_combo_scores[:n])
             else:
                 return self.contexts_EHS_scores(top_combos[:n])
 
@@ -444,7 +445,8 @@ class NeuralNetContextRecommender(ContextRecommender):
             return self.r1_dict[category]
         elif chem_type == 'r2':
             return self.r2_dict[category]
-    def load_EHSdictionary(self,EHSscore_path):
+
+    def load_EHSdictionary(self, EHSscore_path):
         """
         #fills the attribute dictionary self.EHS_dict with solvent:EHS score pairs
         #assumes csv input file does not have any entrees that are not valid ASKCOS solvents
@@ -461,36 +463,31 @@ class NeuralNetContextRecommender(ContextRecommender):
         None.
 
         """
-       
-        with open(EHSscore_path,'r') as f:
-            x = f.read()
-        data=x.split('\n')
-        data.pop(0)
-        data.pop()
-        self.EHS_dict={}
-        for item in data:
-            a=item.split(',')
-            key=a[2]
-            # if not(key):
-            #     continue
-            if a[3].isdigit():
-                value=int(a[3])
-            else:
-                value=7
-            self.EHS_dict[key]=value	
-    def contexts_EHS_scores(self,top_combos):
+        self.EHS_dict = {}
+        with open(EHSscore_path, 'r') as f:
+            for i, line in enumerate(f):
+                if i == 0:
+                    #Skip the first line (header)
+                    continue
+                a = line.strip().split(',') #Remove whitespace and split by commas
+                key = a[2]
+                value = a[3]
+                if value.isdigit():
+                    value = int(value)
+                else:
+                    value = 7
+                self.EHS_dict[key] = value
+
+    def contexts_EHS_scores(self, top_combos):
         """
         Takes a list of contexts for a reaction, as formatted by predict_top_combos,
         and adds to each context a solvent EHS score, and a boolean Best value
 
         """
         #find best score
-        (a,best_score)=self.combo_EHS_score(top_combos)
+        (a, best_score) = self.combo_EHS_score(top_combos)
         for item in top_combos:
-            if item[6]==best_score:
-                item.append(True)
-            else:
-                item.append(False)
+            item.append(item[6] == best_score)
         return top_combos
 
     def combo_EHS_score(self,context_combos, best=True):
@@ -517,71 +514,74 @@ class NeuralNetContextRecommender(ContextRecommender):
               
         
         if best:
-            best_score=8
-            best_combo='no solvents'
+            best_score = 8
+            best_combo = 'no solvents'
             for item in context_combos:
-                if item[1] in self.EHS_dict:
-                    item.append(self.EHS_dict[item[1]])
-                    if self.EHS_dict[item[1]]<best_score:
-                        best_combo=item
-                        best_score=self.EHS_dict[item[1]]
+                solvent = item[1]
+                if solvent in self.EHS_dict:
+                    item.append(self.EHS_dict[solvent])
+                    if self.EHS_dict[solvent] < best_score:
+                        best_combo = item
+                        best_score = self.EHS_dict[solvent]
                     else:
                         pass
-                elif '.' in item[1]:
-                    solvents=item[1].split('.')
-                    count=0
-                    score=0
+                elif '.' in solvent: #if solvent is actually multiple solvents
+                    solvents = solvent.split('.')
+                    count = 0
+                    score = 0
+                    real_score = 8
                     for slv in solvents:
                         if slv in self.EHS_dict:
-                            count+=1
-                            score+=self.EHS_dict[slv]
-                    if count==0:
-                        real_score=8
+                            count += 1
+                            score += self.EHS_dict[slv]
+                    if count == 0:
+                        real_score = 8
                     else:          
-                        real_score=score/count
+                        real_score = score / count
                     item.append(real_score)
-                    if real_score<best_score:
-                        best_combo=item
-                        best_score=real_score
+                    if real_score < best_score:
+                        best_combo = item
+                        best_score = real_score
                     
                 else:
                     item.append(None)
-                    pass
-            
-            return (best_combo,best_score)
-        if not(best):
-            count=0
-            totalEHS=0
+                    pass 
+            return (best_combo, best_score)
+
+        else:
+            count = 0
+            totalEHS = 0
             # if '' in self.EHS_dict:
             #     print ('empty string is a value :(')
             for item in context_combos:
-                if item[1] in self.EHS_dict:
-                    count+=1
-                    totalEHS+=self.EHS_dict[item[1]]
+                solvent = item[1]
+                if solvent in self.EHS_dict:
+                    count += 1
+                    totalEHS += self.EHS_dict[solvent]
                     # print (count,totalEHS)
-                elif '.' in item[1]:
-                    solvents=item[1].split('.')
-                    count+=1
-                    counter=0
-                    scoreer=0
+                elif '.' in solvent:
+                    solvents = solvent.split('.')
+                    count += 1
+                    counter = 0
+                    scoreer = 0
                     for slv in solvents:
                         if slv in self.EHS_dict:
-                            counter+=1
-                            scoreer+=self.EHS_dict[slv]
-                    if counter==0:
-                        count-=1
+                            counter += 1
+                            scoreer += self.EHS_dict[slv]
+                    if counter == 0:
+                        count -= 1
                         continue
-                    real_score=scoreer/counter
-                    totalEHS+=real_score
+                    real_score = scoreer / counter
+                    totalEHS += real_score
                 else:
                     pass
-            if count==0:
-                avg='no solvents'
+            if count == 0:
+                avg = 'no solvents'
             else:
-                avg=totalEHS/count
-            
-            
+                avg = totalEHS / count    
+        
             return avg
+
 if __name__ == '__main__':
     cont = NeuralNetContextRecommender()
 

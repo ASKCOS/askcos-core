@@ -233,7 +233,7 @@ class GeneralSelectivityPredictor:
 
         selectivity, products = zip(*sorted(zip(selectivity, products), reverse=True))
 
-        results = [{'smiles': prod, 'prob': prob, 'rank': i+1} for i, prod, prob in enumerate(zip(products, selectivity))]
+        results = [{'smiles': prod, 'prob': prob, 'rank': i+1} for i, (prod, prob) in enumerate(zip(products, selectivity))]
 
         return results
 

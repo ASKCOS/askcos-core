@@ -199,7 +199,7 @@ class GeneralSelectivityPredictor:
 
         return out
 
-    def predict(self, rxnsmiles, mapped=False, mode='qm-gnn', outcomes_included=False):
+    def predict(self, rxnsmiles, mapped=False, mode='qm-gnn', all_outcomes=False, verbose=True):
 
         if not mapped:
             rsmi, rgsmi, psmi = rxnsmiles.split('>')
@@ -210,7 +210,7 @@ class GeneralSelectivityPredictor:
             else:
                 raise RuntimeError('Cannot find map atom number for the given unmapped reaction.')
 
-        if not outcomes_included:
+        if not all_outcomes:
             rsmi, _, psmi = rxnsmiles.split('>')
             reaction = {'reactants': rsmi, 'products': psmi, '_id': 0}
             try:
@@ -231,9 +231,11 @@ class GeneralSelectivityPredictor:
         _, _, products = rxnsmiles.split('>')
         products = [parsing.canonicalize_mapped_smiles(s) for s in products.split('.')]
 
-        selectivity, products = zip(*sorted(zip(selectivity, products), reverse=True))
-
-        results = [{'smiles': prod, 'prob': prob, 'rank': i+1} for i, (prod, prob) in enumerate(zip(products, selectivity))]
+        if verbose:
+            selectivity, products = zip(*sorted(zip(selectivity, products), reverse=True))
+            results = [{'smiles': prod, 'prob': prob, 'rank': i+1} for i, (prod, prob) in enumerate(zip(products, selectivity))]
+        else:
+            results = selectivity
 
         return results
 

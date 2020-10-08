@@ -199,11 +199,15 @@ class GeneralSelectivityPredictor:
 
         return out
 
-    def predict(self, rxnsmiles, mapped=False, mode='qm-gnn', all_outcomes=False, verbose=True):
+    def predict(self, rxnsmiles, mapped=False, mode='qm-gnn', all_outcomes=False, verbose=True, no_map_reagents=False):
 
         if not mapped:
             rsmi, rgsmi, psmi = rxnsmiles.split('>')
-            [rsmi_am, psmi_am] = self.atom_mapper(rsmi + '>>' + psmi).split('>>')
+
+            if no_map_reagents:
+                [rsmi_am, _, psmi_am] = self.atom_mapper(rsmi + '>>' + psmi).split('>')
+            else:
+                [rsmi_am, rgsmi, psmi_am] = self.atom_mapper(rxnsmiles).split('>')
 
             if rsmi_am and psmi_am:
                 rxnsmiles = '>'.join([rsmi_am, rgsmi, psmi_am])

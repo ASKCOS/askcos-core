@@ -212,7 +212,7 @@ class GeneralSelectivityPredictor:
             if rsmi_am and psmi_am:
                 rxnsmiles = '>'.join([rsmi_am, rgsmi, psmi_am])
             else:
-                raise RuntimeError('Cannot find map atom number for the given unmapped reaction.')
+                raise RuntimeError('Failed to map the given reaction smiles with the selected mapping method, please select other mapping methods.')
 
         if not all_outcomes:
             rsmi, _, psmi = rxnsmiles.split('>')
@@ -220,8 +220,11 @@ class GeneralSelectivityPredictor:
             try:
                 template = extract_from_reaction(reaction)
                 rxnsmiles = apply_template(template, rxnsmiles)
-            except Exception as e:
-                raise RuntimeError('Failed to find outcomes for the given reaction: {}'.format(e))
+            except Exception:
+                raise RuntimeError('Failed to extract or apply reaction template for the given reaction. Please examine your reaction in the atom mapping app.')
+
+        if len(rxnsmiles.split('>')[2].split('.')) <= 1:
+            raise ValueError('The given reaction is not a selective reaction.')
 
         if mode == 'qm-gnn':
             rsmis = rxnsmiles.split('>')[0].split('.')

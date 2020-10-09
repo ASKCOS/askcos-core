@@ -640,8 +640,8 @@ def get_fragments_for_changed_atoms(mols, changed_atom_tags, radius=0,
 
     original = fragments[:-1]
     fragments = re.sub(r'\[[c,n](:)', r'[c,n\1',fragments[:-1])
+    fragments = re.sub(r'\[#7;a(:)', r'[c,n\1', fragments)
     fragments = re.sub('\[(F|Cl|Br|I)(\S+?)\]', r'[F,Cl,Br,I\2]', fragments)
-    #fragments = re.sub('X|F|Cl|Br|I', '[F,Cl,Br,I]', fragments)
 
     return fragments, intra_only, dimer_only, original
 
@@ -745,16 +745,11 @@ def extract_from_reaction(reaction):
             # And bond symbols...
             bond_symbols = ['~' for b in product.GetBonds()]
             if unmapped_ids:
-                try:
-                    extra_reactant_fragment += AllChem.MolFragmentToSmiles(
-                        product, unmapped_ids,
-                        allHsExplicit = False, isomericSmiles = USE_STEREOCHEMISTRY,
-                        atomSymbols = atom_symbols, bondSymbols = bond_symbols
-                    ) + '.'
-                except:
-                    print('AAAAAAAAAAAAAA')
-                    print(len(product.GetAtoms()))
-                    print(atom_symbols)
+                extra_reactant_fragment += AllChem.MolFragmentToSmiles(
+                    product, unmapped_ids,
+                    allHsExplicit = False, isomericSmiles = USE_STEREOCHEMISTRY,
+                    atomSymbols = atom_symbols, bondSymbols = bond_symbols
+                ) + '.'
 
         if extra_reactant_fragment:
             extra_reactant_fragment = extra_reactant_fragment[:-1]

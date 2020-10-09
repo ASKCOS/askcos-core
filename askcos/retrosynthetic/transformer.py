@@ -317,10 +317,11 @@ class RetroTransformer(TemplateTransformer):
 
         templates = self.get_templates_by_indices(indices, template_set)
 
-        for template, score in zip(templates, scores):
+        for rank, (template, score) in enumerate(zip(templates, scores)):
             precursors = self.apply_one_template(mol, template, record_rxn=selec_check)
             for precursor in precursors:
                 precursor['template_score'] = score
+                precursor['template_rank'] = rank + 1
                 joined_smiles = '.'.join(precursor['smiles_split'])
                 precursor['rms_molwt'] = rms_molecular_weight(joined_smiles)
                 precursor['num_rings'] = number_of_rings(joined_smiles)

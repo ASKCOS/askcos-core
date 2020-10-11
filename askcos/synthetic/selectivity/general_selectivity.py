@@ -12,12 +12,13 @@ from askcos import global_config as gc
 from askcos.synthetic.selectivity.general_model.data_loading import gnn_data_generation, qm_gnn_data_generation
 from askcos.synthetic.selectivity.general_model.loss import wln_loss
 from askcos.synthetic.selectivity.general_model.models import WLNReactionClassifier
-from askcos.synthetic.selectivity.general_model.qm_models import QMWLNPairwiseAtomClassifier
+from askcos.synthetic.selectivity.general_model.qm_models import QMWLNPairwiseAtomClassifier, WLNPairwiseAtomClassifierNoReagent
 from askcos.utilities import parsing
 
 
 GNN_model_path = gc.GEN_SELECTIVITY['model_path']['GNN']
 QM_GNN_model_path = gc.GEN_SELECTIVITY['model_path']['QM_GNN']
+QM_GNN_no_reagent_model_path = gc.GEN_SELECTIVITY['model_path']['QM_GNN_no_reagent']
 scaler_path = gc.GEN_SELECTIVITY['scalers']
 initializer = gc.GEN_SELECTIVITY['initializer']
 initializer_qm_descriptors = gc.GEN_SELECTIVITY['initializer_qm']
@@ -184,12 +185,18 @@ class GeneralSelectivityPredictor:
 
         reactants, reagent, products = smiles.split('>')
 
-        self.model = QMWLNPairwiseAtomClassifier(self.hidden_size)
+        if reagent:
+            self.model = QMWLNPairwiseAtomClassifier(self.hidden_size)
+            model_path = QM_GNN_model_path
+        else:
+            self.model = WLNPairwiseAtomClassifierNoReagent(self.hidden_size)
+            model_path = QM_GNN_no_reagent_model_path
+
         initializer_x = qm_gnn_data_generation(initializer.split('>')[0], initializer.split('>')[2],
                                                initializer.split('>')[1], initializer_qm_descriptors)
         self._initialize_model(initializer_x)
         self.model.summary()
-        self.model.load_weights(QM_GNN_model_path)
+        self.model.load_weights(model_path)
 
         qm_df = _min_max_normalize(qm_df, self.qm_scaler)
         test_gen = qm_gnn_data_generation(reactants, products, reagent, qm_df)
@@ -250,6 +257,6 @@ class GeneralSelectivityPredictor:
 # for testing purposes
 if __name__ == "__main__":
     predictor = GeneralSelectivityPredictor()
-    rawrxn = 'CC(COc1n[nH]cc1)C.CC(C)(OC(c1c(Cl)nc(Cl)cc1)=O)C>ClCCl.CN(C=O)C.O.CCOC(C)=O.[NaH]>CC(OC(c1ccc(n2ccc(OCC(C)C)n2)nc1Cl)=O)(C)C'
+    rawrxn = 'CC(COc1n[nH]cc1)C.CC(C)(OC(c1c(Cl)nc(Cl)cc1)=O)C>>CC(OC(c1ccc(n2ccc(OCC(C)C)n2)nc1Cl)=O)(C)C'
     res = predictor.predict(rawrxn)         # (0.9809687733650208, 0.019030507653951645)
     print(res)

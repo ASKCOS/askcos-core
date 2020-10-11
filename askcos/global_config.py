@@ -175,6 +175,7 @@ SELECTIVITY = {
 GEN_SELECTIVITY = {
     'model_path': {'GNN': os.path.join(models_path, 'selectivity', 'general_selectivity', 'GNN_best_model.hdf5'),
                    'QM_GNN': os.path.join(models_path, 'selectivity', 'general_selectivity', 'QM_GNN_best_model.hdf5'),
+                   'QM_GNN_no_reagent': os.path.join(models_path, 'selectivity', 'general_selectivity', 'QM_GNN_best_model_no_reagent.hdf5')
                    },
     'initializer': '[CH4:1]>ClC(Cl)Cl>[CH4:1]',
     'scalers': os.path.join(scalers_path, 'QM_desc_selec.pickle'),

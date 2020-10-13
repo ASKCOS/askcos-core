@@ -40,12 +40,7 @@ class Pricer:
 
         If connection to MongoDB cannot be made, fallback and try to load from local file.
         """
-        db_client = MongoClient(
-            gc.MONGO['path'],
-            gc.MONGO['id'],
-            connect=gc.MONGO['connect'],
-            serverSelectionTimeoutMS=1000
-        )
+        db_client = MongoClient(serverSelectionTimeoutMS=1000, **gc.MONGO)
 
         try:
             db_client.server_info()

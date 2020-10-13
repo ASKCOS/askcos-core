@@ -81,14 +81,13 @@ database = 'askcos'
 # Define databases (should be nonessential if all local files present)
 ################################################################################
 
-MONGO_HOST = os.environ.get('MONGO_HOST', 'MONGO_HOST')
-MONGO_USER = os.environ.get('MONGO_USER', 'USERNAME')
-MONGO_PW = os.environ.get('MONGO_PW', 'PASSWORD')
-
 MONGO = {
-    'path': 'mongodb://{}:{}@{}'.format(MONGO_USER, MONGO_PW, MONGO_HOST),
-    'id': 27017,
-    'connect': False
+    'host': os.environ.get('MONGO_HOST'),
+    'port': int(os.environ.get('MONGO_PORT', 27017)),
+    'username': os.environ.get('MONGO_USER'),
+    'password': os.environ.get('MONGO_PW'),
+    'authSource': os.environ.get('MONGO_AUTH_DB', 'admin'),
+    'connect': False,
 }
 
 RETRO_TEMPLATES = {

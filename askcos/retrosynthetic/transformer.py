@@ -443,7 +443,11 @@ class RetroTransformer(TemplateTransformer):
         else:
             mapped_products = {}
 
-        mapped_precursors = Chem.MolToSmiles(precursor_reacts.reactants)
+        try:
+            mapped_precursors = precursor_reacts.smiles()  # rdchiral_cpp
+        except AttributeError:
+            # Python version of rdchiral
+            mapped_precursors = Chem.MolToSmiles(precursor_reacts.reactants)
 
         return mapped_products, mapped_precursors
 

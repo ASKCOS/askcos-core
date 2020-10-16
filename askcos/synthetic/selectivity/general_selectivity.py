@@ -20,8 +20,23 @@ GNN_model_path = gc.GEN_SELECTIVITY['model_path']['GNN']
 QM_GNN_model_path = gc.GEN_SELECTIVITY['model_path']['QM_GNN']
 QM_GNN_no_reagent_model_path = gc.GEN_SELECTIVITY['model_path']['QM_GNN_no_reagent']
 scaler_path = gc.GEN_SELECTIVITY['scalers']
-initializer = gc.GEN_SELECTIVITY['initializer']
-initializer_qm_descriptors = gc.GEN_SELECTIVITY['initializer_qm']
+
+initializer = '[CH4:1]>ClC(Cl)Cl>[CH4:1]'
+initializer_qm_descriptors = {
+    '[CH4:1]': {'partial_charge': [0.2840435 , 0.42871496, 0.42871496, 0.42871496, 0.42871493],
+    'fukui_neu': [0.40352857, 0.27556148, 0.27556148, 0.27556148, 0.27556148],
+    'fukui_elec': [0.69178367, 0.3259021 , 0.3259021 , 0.3259021 , 0.3259021 ],
+    'NMR': [1.7733233, 0.705616 , 0.705616 , 0.7056161, 0.7056161],
+    'bond_order_matrix': [[0, 0.94360828, 0.94360828, 0.94360828, 0.94360828],
+                         [0.94360828, 0, 0, 0, 0],
+                         [0.94360828, 0, 0, 0, 0],
+                         [0.94360828, 0, 0, 0, 0],
+                         [0.94360828, 0, 0, 0, 0]],
+    'distance_matrix': [[0, 1.0847981, 1.0847981, 1.0847981, 1.0847981],
+                       [1.0847981, 0, 0, 0, 0],
+                       [1.0847981, 0, 0, 0, 0],
+                       [1.0847981, 0, 0, 0, 0],
+                       [1.0847981, 0, 0, 0, 0]]}}
 
 GLOBAL_SCALE = ['partial_charge', 'fukui_neu', 'fukui_elec']
 ATOM_SCALE = ['NMR']

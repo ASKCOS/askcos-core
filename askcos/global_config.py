@@ -176,23 +176,7 @@ GEN_SELECTIVITY = {
                    'QM_GNN': os.path.join(models_path, 'selectivity', 'general_selectivity', 'QM_GNN_best_model.hdf5'),
                    'QM_GNN_no_reagent': os.path.join(models_path, 'selectivity', 'general_selectivity', 'QM_GNN_best_model_no_reagent.hdf5')
                    },
-    'initializer': '[CH4:1]>ClC(Cl)Cl>[CH4:1]',
     'scalers': os.path.join(scalers_path, 'QM_desc_selec.pickle'),
-    'initializer_qm':
-        {'[CH4:1]': {'partial_charge': [0.2840435 , 0.42871496, 0.42871496, 0.42871496, 0.42871493],
-                   'fukui_neu': [0.40352857, 0.27556148, 0.27556148, 0.27556148, 0.27556148],
-                   'fukui_elec': [0.69178367, 0.3259021 , 0.3259021 , 0.3259021 , 0.3259021 ],
-                   'NMR': [1.7733233, 0.705616 , 0.705616 , 0.7056161, 0.7056161],
-                   'bond_order_matrix': [[0.        , 0.94360828, 0.94360828, 0.94360828, 0.94360828],
-                                         [0.94360828, 0.        , 0.        , 0.        , 0.        ],
-                                         [0.94360828, 0.        , 0.        , 0.        , 0.        ],
-                                         [0.94360828, 0.        , 0.        , 0.        , 0.        ],
-                                         [0.94360828, 0.        , 0.        , 0.        , 0.        ]],
-                   'distance_matrix': [[0.       , 1.0847981, 1.0847981, 1.0847981, 1.0847981],
-                                       [1.0847981, 0.       , 0.       , 0.       , 0.       ],
-                                       [1.0847981, 0.       , 0.       , 0.       , 0.       ],
-                                       [1.0847981, 0.       , 0.       , 0.       , 0.       ],
-                                       [1.0847981, 0.       , 0.       , 0.       , 0.       ]]}}
 }
 
 PATHWAY_RANKER = {

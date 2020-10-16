@@ -1,8 +1,6 @@
 """
-This module defines the PathwayRankingHandler for use in Torchserve.
+This module defines the evaulate function for the reactivity descriptor predictor
 """
-
-import os
 
 import numpy as np
 import torch

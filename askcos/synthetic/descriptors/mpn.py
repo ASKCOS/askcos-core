@@ -71,8 +71,8 @@ class MPNEncoder(nn.Module):
 
         f_atoms, f_bonds, a2b, b2a, b2revb, a_scope, b_scope, b2br, bond_types = inputs
 
-        input = self.W_i(f_bonds)  # num_bonds x hidden_size
-        message = self.act_func(input)  # num_bonds x hidden_size
+        input_feature = self.W_i(f_bonds)  # num_bonds x hidden_size
+        message = self.act_func(input_feature)  # num_bonds x hidden_size
 
         # Message passing
         for depth in range(self.depth - 1):
@@ -88,7 +88,7 @@ class MPNEncoder(nn.Module):
             message = a_message[b2a] - rev_message  # num_bonds x hidden
 
             message = self.W_h(message)
-            message = self.act_func(input + message)  # num_bonds x hidden_size
+            message = self.act_func(input_feature + message)  # num_bonds x hidden_size
             message = self.dropout_layer(message)  # num_bonds x hidden
 
         # atom hidden

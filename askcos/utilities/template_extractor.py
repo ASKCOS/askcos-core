@@ -1,3 +1,11 @@
+'''
+template extracting module using Rdkit derived from the rdchiral template extractor:
+https://github.com/connorcoley/rdchiral/blob/master/rdchiral/template_extractor.py
+
+entrypoint: extract_from_reaction
+Modification: chemistry groups in get_special_groups are turned off for more general templates
+'''
+
 import re
 from numpy.random import shuffle
 from copy import deepcopy
@@ -227,6 +235,7 @@ def get_special_groups(mol):
     be included if another atom matches.'''
 
     # Define templates
+    # Template are turned off for more general templates used for selectivity predictions
     group_templates = [
         #(range(3), '[OH0,SH0]=C[O,Cl,I,Br,F]',), # carboxylic acid / halogen
         #(range(3), '[OH0,SH0]=CN',), # amide/sulfamide

@@ -9,7 +9,7 @@ class QMWLNPairwiseAtomClassifier(tf.keras.Model):
 
     '''
 
-    def __init__(self, hidden_size, qm_size=160, depth=4, max_nb=10):
+    def __init__(self, hidden_size=200, qm_size=160, depth=4, max_nb=10):
         super(QMWLNPairwiseAtomClassifier, self).__init__()
         self.hidden_size = hidden_size
         self.qm_size = qm_size
@@ -60,7 +60,7 @@ class WLNPairwiseAtomClassifierNoReagent(tf.keras.Model):
 
     '''
 
-    def __init__(self, hidden_size, qm_size=160, depth=4, max_nb=10):
+    def __init__(self, hidden_size=200, qm_size=160, depth=4, max_nb=10):
         super(WLNPairwiseAtomClassifierNoReagent, self).__init__()
         self.hidden_size = hidden_size
         self.qm_size = qm_size

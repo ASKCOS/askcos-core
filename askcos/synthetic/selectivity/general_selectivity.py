@@ -1,5 +1,4 @@
-import tensorflow.compat.v1 as tf
-tf.disable_v2_behavior()
+import tensorflow as tf
 from scipy.special import softmax
 import pandas as pd
 import numpy as np
@@ -110,8 +109,7 @@ def apply_template(template, rxn_smiles):
 
 class GeneralSelectivityPredictor:
 
-    def __init__(self, depth=4, hidden_size=200,
-                 atom_mapper=None, descriptor_predictor=None):
+    def __init__(self, atom_mapper=None, descriptor_predictor=None):
 
         if atom_mapper is None:
             from askcos.synthetic.atom_mapper.wln_mapper import WLN_AtomMapper
@@ -121,38 +119,11 @@ class GeneralSelectivityPredictor:
             from askcos.synthetic.descriptors.descriptors import ReactivityDescriptor
             descriptor_predictor = ReactivityDescriptor().evaluate
 
-        self.depth = depth
-        self.hidden_size = hidden_size
-
         self.qm_scaler = pd.read_pickle(scaler_path)
-        self.GNN_model = None
-        self.QM_GNN_model = None
         self.model = None
 
         self.atom_mapper = atom_mapper
         self.descriptor_predictor = descriptor_predictor
-
-        #self.build()
-        
-    def build(self):
-
-        initializer_x, _ = self.DataLoader([initializer.split('>')[0]], [initializer.split('>')[2]])[0]
-
-        # build GNN model
-        self.GNN_model = WLNReactionClassifier(self.hidden_size)
-        opt = tf.keras.optimizers.Adam(lr=0.001, clipnorm=5.0)
-        self.GNN_model.compile(
-            optimizer=opt,
-            loss=wln_loss,
-        )
-        self.GNN_model.predict_on_batch(initializer_x)
-        self.GNN_model.load_weights(GNN_model_path)
-
-        # build QM GNN model
-        self.QM_GNN_model = QMWLNPairwiseAtomClassifier(self.hidden_size)
-        self.QM_GNN_model.compile(optimizer=opt, loss=wln_loss)
-        self.QM_GNN_model.load_weights(QM_GNN_model_path)
-
 
     def _initialize_model(self, initializer_x):
         opt = tf.keras.optimizers.Adam(lr=0.001, clipnorm=5.0)
@@ -162,66 +133,9 @@ class GeneralSelectivityPredictor:
         )
         self.model.predict_on_batch(initializer_x)
 
-
-    def predict_gnn(self, smiles):
-        """
-        predict the selectivity from atommapped reactions as reactants>>product1.product2.product3....
-        :param smiles:
-        :param template:
-        :return:
-        """
-
-        reactants, _, products = smiles.split('>')
-
-        # find atom map number
-
-        #FIXME the dynamic model seems like to be incompatible with the celery, that the model created in build
-        # actaully cannot be reused in the predict, currently an akward method is used to create and load model each
-        # time the predict function is called. The grapn network need to be modified into static graph later.
-        self.model = WLNReactionClassifier(self.hidden_size)
-        initializer_x = gnn_data_generation(initializer.split('>')[0], initializer.split('>')[2])
-        self._initialize_model(initializer_x)
-        self.model.load_weights(GNN_model_path)
-        test_gen = gnn_data_generation(reactants, products)
-
-        out = self.model.predict_on_batch(test_gen).reshape([-1])
-        out = tuple([float(x) for x in softmax(out)])
-
-        return out
-
-    def predict_qm_gnn(self, smiles, qm_df):
-        """
-
-        :param smiles:
-        :return:
-        """
-
-        print(qm_df)
-
-        reactants, reagent, products = smiles.split('>')
-
-        if reagent:
-            self.model = QMWLNPairwiseAtomClassifier(self.hidden_size)
-            model_path = QM_GNN_model_path
-        else:
-            self.model = WLNPairwiseAtomClassifierNoReagent(self.hidden_size)
-            model_path = QM_GNN_no_reagent_model_path
-
-        initializer_x = qm_gnn_data_generation(initializer.split('>')[0], initializer.split('>')[2],
-                                               initializer.split('>')[1], initializer_qm_descriptors)
-        self._initialize_model(initializer_x)
-        self.model.summary()
-        self.model.load_weights(model_path)
-
-        qm_df = _min_max_normalize(qm_df, self.qm_scaler)
-        test_gen = qm_gnn_data_generation(reactants, products, reagent, qm_df)
-
-        out = self.model.predict_on_batch(test_gen).reshape([-1])
-        out = tuple([float(x) for x in softmax(out)])
-
-        return out
-
     def predict(self, rxnsmiles, mapped=False, mode='qm-gnn', all_outcomes=False, verbose=True, no_map_reagents=False):
+
+        self.build()
 
         if not mapped:
             rsmi, rgsmi, psmi = rxnsmiles.split('>')
@@ -248,14 +162,7 @@ class GeneralSelectivityPredictor:
         if len(rxnsmiles.split('>')[2].split('.')) <= 1:
             raise ValueError('The given reaction is not a selective reaction.')
 
-        if mode == 'qm-gnn':
-            rsmis = rxnsmiles.split('>')[0].split('.')
-            descriptors = [self.descriptor_predictor(rsmi) for rsmi in rsmis]
-            selectivity = self.predict_qm_gnn(rxnsmiles, descriptors)
-        elif mode == 'gnn':
-            selectivity = self.predict_gnn(rxnsmiles)
-        else:
-            raise ValueError("Selectivity mode is invalid")
+        selectivity = self.reference(rxnsmiles)
 
         _, _, products = rxnsmiles.split('>')
         products = [parsing.canonicalize_mapped_smiles(s) for s in products.split('.')]
@@ -269,9 +176,77 @@ class GeneralSelectivityPredictor:
         return results
 
 
+class GnnGeneralSelectivityPredictor(GeneralSelectivityPredictor):
+
+    def __init__(self, atom_mapper=None, descriptor_predictor=None):
+        super(GnnGeneralSelectivityPredictor, self).__init__(atom_mapper=atom_mapper, descriptor_predictor=descriptor_predictor)
+
+    def build(self):
+        model_path = GNN_model_path
+
+        self.model = WLNReactionClassifier()
+        initializer_x = gnn_data_generation(initializer.split('>')[0], initializer.split('>')[2])
+        self._initialize_model(initializer_x)
+        self.model.load_weights(model_path)
+
+    def reference(self, rxnsmiles):
+        reactants, _, products = rxnsmiles.split('>')
+        test_gen = gnn_data_generation(reactants, products)
+
+        out = self.model.predict_on_batch(test_gen).reshape([-1])
+        out = tuple([float(x) for x in softmax(out)])
+
+        return out
+
+
+class QmGnnGeneralSelectivityPredictor(GeneralSelectivityPredictor):
+
+    def __init__(self, atom_mapper=None, descriptor_predictor=None):
+        super(QmGnnGeneralSelectivityPredictor, self).__init__(atom_mapper=atom_mapper, descriptor_predictor=descriptor_predictor)
+
+    def build(self):
+        model_path = QM_GNN_model_path
+        initializer_x = qm_gnn_data_generation(initializer.split('>')[0], initializer.split('>')[2],
+                                               initializer.split('>')[1], initializer_qm_descriptors)
+        self.model = QMWLNPairwiseAtomClassifier()
+        self._initialize_model(initializer_x)
+
+        print('Loading QM-GNN-Reagent selectivity model')
+        self.model.summary()
+        self.model.load_weights(model_path)
+
+    def reference(self, rxnsmiles):
+        reactants, reagent, products = rxnsmiles.split('>')
+        rsmis = reactants.split('.')
+        descriptors = [self.descriptor_predictor(rsmi) for rsmi in rsmis]
+        qm_df = _min_max_normalize(descriptors, self.qm_scaler)
+        test_gen = qm_gnn_data_generation(reactants, products, reagent, qm_df)
+
+        out = self.model.predict_on_batch(test_gen).reshape([-1])
+        out = tuple([float(x) for x in softmax(out)])
+
+        return out
+
+
+class QmGnnGeneralSelectivityPredictorNoReagent(QmGnnGeneralSelectivityPredictor):
+
+    def __init__(self, atom_mapper=None, descriptor_predictor=None):
+        super(QmGnnGeneralSelectivityPredictorNoReagent, self).__init__(atom_mapper=atom_mapper, descriptor_predictor=descriptor_predictor)
+
+    def build(self):
+        model_path = QM_GNN_no_reagent_model_path
+        initializer_x = qm_gnn_data_generation(initializer.split('>')[0], initializer.split('>')[2],
+                                               initializer.split('>')[1], initializer_qm_descriptors)
+        self.model = WLNPairwiseAtomClassifierNoReagent()
+        self._initialize_model(initializer_x)
+
+        print('Loading QM-GNN-No-Reagent selectivity model')
+        self.model.summary()
+        self.model.load_weights(model_path)
+
+
 # for testing purposes
 if __name__ == "__main__":
-    predictor = GeneralSelectivityPredictor()
+    predictor = QmGnnGeneralSelectivityPredictorNoReagent()
     rawrxn = 'CC(COc1n[nH]cc1)C.CC(C)(OC(c1c(Cl)nc(Cl)cc1)=O)C>>CC(OC(c1ccc(n2ccc(OCC(C)C)n2)nc1Cl)=O)(C)C'
     res = predictor.predict(rawrxn)         # (0.9809687733650208, 0.019030507653951645)
-    print(res)

@@ -26,7 +26,8 @@ def nx_paths_to_json(paths, root_uuid, json_format='treedata'):
     Convert list of paths from networkx graphs to json.
     """
     if json_format == 'treedata':
-        return [clean_json(nx.tree_data(path, root_uuid)) for path in paths]
+        # Include graph attributes at top level of resulting json
+        return [{'attributes': path.graph, **clean_json(nx.tree_data(path, root_uuid))} for path in paths]
     elif json_format == 'nodelink':
         return [clean_json(nx.node_link_data(path, attrs=NODE_LINK_ATTRS)) for path in paths]
     else:

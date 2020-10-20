@@ -133,9 +133,16 @@ class GeneralSelectivityPredictor:
         )
         self.model.predict_on_batch(initializer_x)
 
-    def predict(self, rxnsmiles, mapped=False, mode='qm-gnn', all_outcomes=False, verbose=True, no_map_reagents=False):
+    def predict(self, rxnsmiles, atom_mapper=None, descriptor_predictor=None,
+                mapped=False, all_outcomes=False, verbose=True, no_map_reagents=False):
 
         self.build()
+
+        if atom_mapper is not None:
+            self.atom_mapper = atom_mapper
+
+        if descriptor_predictor is not None:
+            self.descriptor_predictor = descriptor_predictor
 
         if not mapped:
             rsmi, rgsmi, psmi = rxnsmiles.split('>')
@@ -249,4 +256,5 @@ class QmGnnGeneralSelectivityPredictorNoReagent(QmGnnGeneralSelectivityPredictor
 if __name__ == "__main__":
     predictor = QmGnnGeneralSelectivityPredictorNoReagent()
     rawrxn = 'CC(COc1n[nH]cc1)C.CC(C)(OC(c1c(Cl)nc(Cl)cc1)=O)C>>CC(OC(c1ccc(n2ccc(OCC(C)C)n2)nc1Cl)=O)(C)C'
-    res = predictor.predict(rawrxn)         # (0.9809687733650208, 0.019030507653951645)
+    res = predictor.predict(rawrxn)
+    print(res)# (0.9809687733650208, 0.019030507653951645)

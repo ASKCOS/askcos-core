@@ -102,7 +102,12 @@ def apply_template(template, rxn_smiles):
 
     outcomes = rdchiralRun(forward_rxn, precursor, return_mapped=True)
     outcomes = list([x[0] for x in outcomes[1].values()])
-    reactants = Chem.MolToSmiles(precursor.reactants)
+
+    try:
+        reactants = precursor.smiles() # rdchiral_cpp
+    except AttributeError:
+        # Python version of rdchiral
+        reactants = Chem.MolToSmiles(precursor.reactants)
 
     return '>'.join([reactants, rg, '.'.join(outcomes)])
 

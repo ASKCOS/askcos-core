@@ -1,6 +1,8 @@
 from rdkit import Chem
 import numpy as np
 
+from .electronegs import electronegs
+
 elem_list = ['C', 'N', 'O', 'S', 'F', 'Si', 'P', 'Cl', 'Br', 'Mg', 'Na', 'Ca', 'Fe', 'As', 'Al', 'I', 'B', 'V', 'K',
              'Tl', 'Yb', 'Sb', 'Sn', 'Ag', 'Pd', 'Co', 'Se', 'Ti', 'Zn', 'H', 'Li', 'Ge', 'Cu', 'Au', 'Ni', 'Cd', 'In',
              'Mn', 'Zr', 'Cr', 'Pt', 'Hg', 'Pb', 'W', 'Ru', 'Nb', 'Re', 'Te', 'Rh', 'Tc', 'Ba', 'Bi', 'Hf', 'Mo', 'U',
@@ -11,7 +13,12 @@ bond_fdim = 6
 max_nb = 10
 binary_fdim = 5 + 6
 
-from .electronegs import electronegs 
+
+def get_atom_fdim(include_electronegs=False):
+    if include_electronegs:
+        return atom_fdim + 1
+    else:
+        return atom_fdim
 
 
 def onek_encoding_unk(x, allowable_set):
@@ -20,12 +27,17 @@ def onek_encoding_unk(x, allowable_set):
     return list(map(lambda s: x == s, allowable_set))
 
 
-def atom_features(atom, elem_list):
+def atom_features(atom, elem_list, include_electronegs=False):
+    if include_electronegs:
+        last_feature = [atom.GetIsAromatic(), electronegs[atom.GetAtomicNum()]]
+    else:
+        last_feature = [atom.GetIsAromatic()]
+
     return np.array(onek_encoding_unk(atom.GetSymbol(), elem_list)
-                    + onek_encoding_unk(atom.GetDegree(), [0, 1, 2, 3, 4, 5])
-                    + onek_encoding_unk(atom.GetExplicitValence(), [1, 2, 3, 4, 5, 6])
-                    + onek_encoding_unk(atom.GetImplicitValence(), [0, 1, 2, 3, 4, 5])
-                    + [atom.GetIsAromatic()], dtype=np.float32)
+                    + onek_encoding_unk(atom.GetDegree(), [0,1,2,3,4,5])
+                    + onek_encoding_unk(atom.GetExplicitValence(), [1,2,3,4,5,6])
+                    + onek_encoding_unk(atom.GetImplicitValence(), [0,1,2,3,4,5])
+                    + last_feature, dtype=np.float32)
 
 
 def bond_features(bond):
@@ -33,17 +45,21 @@ def bond_features(bond):
     return np.array([bt == Chem.rdchem.BondType.SINGLE, bt == Chem.rdchem.BondType.DOUBLE, bt == Chem.rdchem.BondType.TRIPLE, bt == Chem.rdchem.BondType.AROMATIC, bond.GetIsConjugated(), bond.IsInRing()], dtype=np.float32)
 
 
-def smiles2graph(smiles, idxfunc=lambda x: x.GetIdx()):
+def smiles2graph(smiles, idxfunc=lambda x: x.GetIdx(), include_electronegs=False):
     mol = Chem.MolFromSmiles(smiles)
     if not mol:
         raise ValueError("Could not parse smiles string:", smiles)
 
-    fatoms, fbonds, atom_nb, bond_nb, num_nbs, _ = _mol2graph(mol, idxfunc)
+    fatoms, fbonds, atom_nb, bond_nb, num_nbs, _ = _mol2graph(mol, idxfunc, include_electronegs=include_electronegs)
 
     return fatoms, fbonds, atom_nb, bond_nb, num_nbs
 
 
-def _mol2graph(mol, idxfunc=lambda x: x.GetIdx(), core=[], atom_fdim=atom_fdim):
+def _mol2graph(mol, idxfunc=lambda x: x.GetIdx(), core=[], atom_fdim=atom_fdim, include_electronegs=False):
+
+    if include_electronegs:
+        atom_fdim += 1
+
     n_atoms = mol.GetNumAtoms()
     n_bonds = max(mol.GetNumBonds(), 1)
     fatoms = np.zeros((n_atoms, atom_fdim))
@@ -57,7 +73,7 @@ def _mol2graph(mol, idxfunc=lambda x: x.GetIdx(), core=[], atom_fdim=atom_fdim):
         idx = idxfunc(atom)
         if idx >= n_atoms:
             raise Exception(Chem.MolToSmiles(mol))
-        fatoms[idx] = atom_features(atom, elem_list)
+        fatoms[idx] = atom_features(atom, elem_list, include_electronegs=include_electronegs)
         if idx in core:
             core_mask[idx] = 1
 
@@ -456,7 +472,7 @@ def binary_features_batch(r_list):
     return np.array(features)
 
 
-def smiles2graph_list(smiles_list, idxfunc=lambda x:x.GetIdx()):
-    res = list(map(lambda x:smiles2graph(x,idxfunc), smiles_list))
+def smiles2graph_list(smiles_list, idxfunc=lambda x:x.GetIdx(), include_electronegs=False):
+    res = list(map(lambda x:smiles2graph(x,idxfunc, include_electronegs), smiles_list))
     fatom_list, fbond_list, gatom_list, gbond_list, nb_list = zip(*res)
     return pack2D(fatom_list), pack2D(fbond_list), pack2D_withidx(gatom_list), pack2D_withidx(gbond_list), pack1D(nb_list), get_mask(fatom_list)

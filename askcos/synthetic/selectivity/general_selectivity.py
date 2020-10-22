@@ -259,7 +259,7 @@ class QmGnnGeneralSelectivityPredictorNoReagent(QmGnnGeneralSelectivityPredictor
 
 # for testing purposes
 if __name__ == "__main__":
-    predictor = QmGnnGeneralSelectivityPredictor()
-    rawrxn = 'CC(COc1n[nH]cc1)C.CC(C)(OC(c1c(Cl)nc(Cl)cc1)=O)C>CN(C=O)C.O>CC(OC(c1ccc(n2ccc(OCC(C)C)n2)nc1Cl)=O)(C)C'
+    predictor = GnnGeneralSelectivityPredictor()
+    rawrxn = 'CC(COc1n[nH]cc1)C.CC(C)(OC(c1c(Cl)nc(Cl)cc1)=O)C>>CC(OC(c1ccc(n2ccc(OCC(C)C)n2)nc1Cl)=O)(C)C'
     res = predictor.predict(rawrxn)
     print(res)# (0.9809687733650208, 0.019030507653951645)

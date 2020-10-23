@@ -21,7 +21,7 @@ class TestSCScore(unittest.TestCase):
     def test_03_get_priority_2048bool(self):
         self.model.load_model(model_tag='2048bool', FP_len=2048)
         result = self.model.get_priority('CCCOCCC', noprice=False)
-        expected = -0.02
+        expected = -0.01
         self.assertLess(abs(expected - result), 1e-4)
 
     def test_04_get_priority_2048bool(self):
@@ -33,7 +33,7 @@ class TestSCScore(unittest.TestCase):
     def test_05_get_priority_1024uint8(self):
         self.model.load_model(model_tag='1024uint8')
         result = self.model.get_priority('CCCOCCC', noprice=False)
-        expected = -0.02
+        expected = -0.01
         self.assertLess(abs(expected - result), 1e-4)
 
     def test_06_get_priority_1024uint8(self):

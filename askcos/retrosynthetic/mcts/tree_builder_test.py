@@ -1,3 +1,4 @@
+import sys
 import unittest
 
 import numpy as np
@@ -11,6 +12,13 @@ class DummyHistorian:
         return {'as_reactant': 0, 'as_product': 0}
 
 
+# Check if any other test modules have been imported
+# Hacky workaround since tensorflow is not fork-safe
+# This test module must be run alone in it's own process to work
+test_modules = [mod for mod in sys.modules if mod.endswith('_test') and not mod.endswith('tree_builder_test')]
+
+
+@unittest.skipIf(test_modules, 'Tree builder test must be run in independent process.')
 class TestMCTSTreeBuilder(unittest.TestCase):
     """Contains functional tests for the MCTS class."""
 

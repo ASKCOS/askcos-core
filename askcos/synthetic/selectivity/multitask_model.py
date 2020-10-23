@@ -8,7 +8,7 @@ from askcos import global_config as gc
 from askcos.synthetic.evaluation.rexgen_direct.core_wln_global.models import rcnn_wl_last
 from askcos.synthetic.evaluation.rexgen_direct.core_wln_global.nn import linearND
 from askcos.synthetic.selectivity.ioutils_direct import binary_features_batch, binary_fdim
-from askcos.synthetic.selectivity.mol_graph import atom_fdim as adim, bond_fdim as bdim, max_nb, smiles2graph_list as _s2g
+from askcos.synthetic.selectivity.mol_graph import get_atom_fdim as adim, bond_fdim as bdim, max_nb, smiles2graph_list as _s2g
 
 model_path = gc.SELECTIVITY['model_path']
 
@@ -25,8 +25,8 @@ class tf_predictor():
         self.saver = None
         self.num_tasks = len(self.task_dict)
         self.save_path = model_path
-        self.smiles2graph_batch = partial(_s2g, idxfunc=lambda x:x.GetIdx())
-        self.adim = adim
+        self.smiles2graph_batch = partial(_s2g, idxfunc=lambda x:x.GetIdx(), include_electronegs=True)
+        self.adim = adim(include_electronegs=True)
         self.bdim = bdim
         self.max_nb = max_nb
         

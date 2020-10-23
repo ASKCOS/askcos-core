@@ -13,7 +13,7 @@ class GeneralSelectivity(unittest.TestCase):
         res = predictor.predict(rxn)
         self.assertEqual(len(res), 2)
         self.assertEqual(type(res[0]), dict)
-        self.assertAlmostEqual(res[0]['prob'], 0.98, 2)
+        self.assertAlmostEqual(res[0]['prob'], 1, 2)
 
     def test_qm_gnn_predictor_no_reagents(self):
         """Test qm_gnn predictor"""

@@ -168,7 +168,7 @@ class TestMCTS(unittest.TestCase):
         node_data = self.mcts.tree.nodes[rxn]
         self.assertIsInstance(node_data, dict)
         self.assertEqual(node_data['est_value'], 0)
-        self.assertEqual(node_data['ff_score'], 0.9)
+        self.assertEqual(node_data['plausibility'], 0.9)
         self.assertEqual(node_data['template_score'], 0.5)
         self.assertEqual(node_data['templates'], [42])
         self.assertEqual(node_data['type'], 'reaction')
@@ -190,9 +190,8 @@ class TestMCTS(unittest.TestCase):
         c1 = 'COS(=O)(=O)OC'
         c2 = 'O=C1CN=C(c2ccccc2)c2cc(Cl)ccc2N1'
         precursors = [[c1, c2]]
-        path = [chem]
 
-        self.mcts._process_precursors(chem, template, precursors, path)
+        self.mcts._process_precursors(chem, template, precursors)
 
         self.assertEqual(len(self.mcts.tree), 4)
 
@@ -215,7 +214,7 @@ class TestMCTS(unittest.TestCase):
         self.assertIn(rxn, self.mcts.reactions)
         node_data = self.mcts.tree.nodes[rxn]
 
-        self.assertAlmostEqual(node_data['ff_score'], 0.99978, places=3)
+        self.assertAlmostEqual(node_data['plausibility'], 0.99978, places=3)
         self.assertAlmostEqual(node_data['template_score'], 0.13412, places=3)
         self.assertEqual(node_data['templates'], [template])
 

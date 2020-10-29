@@ -172,7 +172,7 @@ class GeneralSelectivityPredictor:
                 raise RuntimeError('Failed to extract or apply reaction template for the given reaction. Please examine your reaction in the atom mapping app.')
 
         if len(rxnsmiles.split('>')[2].split('.')) <= 1:
-            raise ValueError('The given reaction is not a selective reaction.')
+            raise ValueError('Regioselectivity is not applicable for the given reaction.')
 
         selectivity = self.reference(rxnsmiles)
 

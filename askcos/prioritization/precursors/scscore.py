@@ -30,18 +30,21 @@ class SCScorePrecursorPrioritizer(Prioritizer):
         pricer (Pricer or None): Pricer instance to lookup chemical costs.
     """
 
-    def __init__(self, score_scale=5.0):
+    def __init__(self, score_scale=5.0, pricer=None):
         """Initializes SCScorePrecursorPrioritizer.
 
         Args:
             score_scale (float, optional): Upper-bound of scale for scoring.
                 (default: {5.0})
+            pricer (None or Pricer, optional): Pricer instance to look up
+                chemical costs. If None, will be loaded using default
+                settings. (default: {None})
         """
         self.vars = []
         self.FP_rad = 2
         self.score_scale = score_scale
         self._restored = False
-        self.pricer = None
+        self.pricer = pricer
         self._loaded = False
 
     def load_model(self, FP_len=1024, model_tag='1024bool'):
@@ -101,8 +104,10 @@ class SCScorePrecursorPrioritizer(Prioritizer):
                                                                       useChirality=True), dtype=np.bool)
         self.mol_to_fp = mol_to_fp
 
-        self.pricer = Pricer()
-        self.pricer.load()
+        if self.pricer is None:
+            self.pricer = Pricer()
+            self.pricer.load()
+
         self._restored = True
         self._loaded = True
 
@@ -156,10 +161,10 @@ class SCScorePrecursorPrioritizer(Prioritizer):
         if not isinstance(retroProduct, str):
             scores = []
             for smiles in retroProduct.smiles_list:
-                scores.append(self.get_score_from_smiles(smiles))
+                scores.append(self.get_score_from_smiles(smiles, **kwargs))
             return -self.merge_scores(scores, mode=mode)
         else:
-            return -self.get_score_from_smiles(retroProduct)
+            return -self.get_score_from_smiles(retroProduct, **kwargs)
         if not retroProduct:
             return -inf
 
@@ -185,13 +190,13 @@ class SCScorePrecursorPrioritizer(Prioritizer):
         else:
             return np.max(list_of_scores)
 
-    def get_score_from_smiles(self, smiles, noprice=False):
+    def get_score_from_smiles(self, smiles, noprice=True):
         """Returns score of molecule from given SMILES string.
 
         Args:
             smiles (str): SMILES string of molecule.
             noprice (bool, optional): Whether to not use the molecules price as
-                its score, if available. (default: {False})
+                its score, if available. (default: {True})
         """
         # Check buyable
         if not noprice:
@@ -206,6 +211,51 @@ class SCScorePrecursorPrioritizer(Prioritizer):
             # Run
             cur_score = self.apply(fp)
         return cur_score
+
+    def get_max_score_from_joined_smiles(self, smiles, noprice=True):
+        """Returns the max score for a given multi-species SMILES string.
+
+        Args:
+            smiles (str): SMILES string
+            noprice (bool, optional): Whether to not use the molecules price as
+                its score, if available. (default: {True})
+        """
+        smiles_list = smiles.split('.')
+        return self.get_max_score_from_smiles_list(smiles_list, noprice=noprice)
+
+    def get_max_score_from_smiles_list(self, smiles_list, noprice=True):
+        """Returns the max score for a given list of SMILES strings.
+
+        Args:
+            smiles_list (str): list of SMILES strings
+            noprice (bool, optional): Whether to not use the molecules price as
+                its score, if available. (default: {True})
+        """
+        return np.max([
+            self.get_score_from_smiles(smiles, noprice=noprice)
+            for smiles in smiles_list
+        ])
+
+    def reorder_precursors(self, precursors, noprice=True):
+        """Reorder a list of precursors by their SCScore. Sorts so lower SCScore is higher rank.
+
+        Args:
+            precursors (list of dict): list of precursor dictionaires
+            noprice (bool, optional): Whether to not use the molecules price as
+                its score, if available. (default: {True})
+
+        Returns:
+            list: reordered list of precursor dictionaries with new 'score' and 'rank' keys
+        """
+        for p in precursors:
+            p['score'] = self.get_max_score_from_smiles_list(p['smiles_split'], noprice=noprice)
+
+        results = sorted(precursors, key=lambda x: x['score'])
+
+        for n, p in enumerate(results):
+            p['rank'] = n + 1
+
+        return results
 
 
 def sigmoid(x):

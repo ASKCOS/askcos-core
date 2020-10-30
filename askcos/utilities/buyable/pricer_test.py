@@ -2,6 +2,7 @@ import gzip
 import os
 import unittest
 
+import pandas as pd
 from pymongo import MongoClient, collection, errors
 
 import askcos.global_config as gc
@@ -10,12 +11,7 @@ from askcos.utilities.buyable.pricer import Pricer
 
 def db_available():
     """Check if a mongo db instance is available."""
-    db_client = MongoClient(
-        gc.MONGO['path'],
-        gc.MONGO['id'],
-        connect=gc.MONGO['connect'],
-        serverSelectionTimeoutMS=1000,
-    )
+    db_client = MongoClient(serverSelectionTimeoutMS=1000, **gc.MONGO)
 
     try:
         db_client.server_info()
@@ -32,8 +28,12 @@ class TestPricer(unittest.TestCase):
         """This method is run once before every test in this module."""
         cls.pricer = Pricer(use_db=False)
         # Set some arbitrary prices
-        cls.pricer.prices['CCCCCO'] = 1.0
-        cls.pricer.prices['c1ccccc1'] = 2.0
+        data = [
+            {'smiles': 'CCCCCO', 'source': 'test1', 'ppg': 1.0},
+            {'smiles': 'c1ccccc1', 'source': 'test1', 'ppg': 2.0},
+            {'smiles': 'c1ccccc1', 'source': 'test2', 'ppg': 3.0},
+        ]
+        cls.pricer.prices = pd.DataFrame(data)
 
     def test_lookup_existing_smiles(self):
         """Test that we can lookup a SMILES that exists."""
@@ -41,9 +41,27 @@ class TestPricer(unittest.TestCase):
         expected = 1.0
         self.assertAlmostEqual(expected, result)
 
+    def test_lookup_existing_smiles_source(self):
+        """Test that we can lookup a SMILES that exists."""
+        result = self.pricer.lookup_smiles('c1ccccc1', source='test2')
+        expected = 3.0
+        self.assertAlmostEqual(expected, result)
+
+    def test_lookup_existing_smiles_source_2(self):
+        """Test that we can lookup a SMILES that exists."""
+        result = self.pricer.lookup_smiles('c1ccccc1', source=['test1', 'test2'])
+        expected = 2.0
+        self.assertAlmostEqual(expected, result)
+
     def test_lookup_nonexisting_smiles(self):
         """Test that we can lookup a SMILES that does not exist."""
         result = self.pricer.lookup_smiles('CCCCCN')
+        expected = 0.0
+        self.assertAlmostEqual(expected, result)
+
+    def test_lookup_nonexisting_smiles_source(self):
+        """Test that we can lookup a SMILES that does not exist."""
+        result = self.pricer.lookup_smiles('CCCCCO', source='test2')
         expected = 0.0
         self.assertAlmostEqual(expected, result)
 
@@ -61,12 +79,12 @@ class TestPricer(unittest.TestCase):
 
         with gzip.open(filename, 'rt', encoding='utf-8') as f:
             # Just check the length of the string, since dict order is non-deterministic
-            self.assertEqual(len(f.read()), 70)
+            self.assertEqual(len(f.read()), 146)
 
         new_pricer = Pricer()
         new_pricer.load_from_file(filename)
 
-        self.assertEqual(self.pricer.prices, new_pricer.prices)
+        self.assertTrue(self.pricer.prices.equals(new_pricer.prices))
 
         os.remove(filename)
 
@@ -82,7 +100,7 @@ class TestPricer(unittest.TestCase):
 
         self.assertFalse(new_pricer.use_db)
         self.assertIsNone(new_pricer.BUYABLES_DB)
-        self.assertEqual(self.pricer.prices, new_pricer.prices)
+        self.assertTrue(self.pricer.prices.equals(new_pricer.prices))
 
         os.remove(filename)
 

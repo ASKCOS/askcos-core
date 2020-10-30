@@ -4,6 +4,7 @@ import os
 from collections import defaultdict
 
 import rdkit.Chem as Chem
+import pandas as pd
 from pymongo import MongoClient, errors
 
 import askcos.global_config as gc
@@ -22,7 +23,7 @@ class Pricer:
 
         self.BUYABLES_DB = BUYABLES_DB
         self.use_db = use_db
-        self.prices = defaultdict(float)  # default 0 ppg means not buyable
+        self.prices = None
 
     def load(self, file_name=gc.BUYABLES['file_name']):
         """
@@ -39,12 +40,7 @@ class Pricer:
 
         If connection to MongoDB cannot be made, fallback and try to load from local file.
         """
-        db_client = MongoClient(
-            gc.MONGO['path'],
-            gc.MONGO['id'],
-            connect=gc.MONGO['connect'],
-            serverSelectionTimeoutMS=1000
-        )
+        db_client = MongoClient(serverSelectionTimeoutMS=1000, **gc.MONGO)
 
         try:
             db_client.server_info()
@@ -60,32 +56,40 @@ class Pricer:
         """
         Write prices to a local file
         """
-        prices = [{'smiles': s, 'ppg': p} for s, p in self.prices.items()]
-
-        with gzip.open(file_path, 'wt', encoding='utf-8') as f:
-            json.dump(prices, f)
+        self.prices.to_json(file_path, orient='records', compression='gzip')
 
     def load_from_file(self, file_name):
         """
         Load buyables information from local file
         """
         if os.path.isfile(file_name):
-            with gzip.open(file_name, 'rt', encoding='utf-8') as f:
-                prices = json.load(f)
-
-            self.prices.update({p['smiles']: p['ppg'] for p in prices if p.get('smiles')})
-
+            self.prices = pd.read_json(
+                file_name,
+                orient='records',
+                dtype={'smiles': 'object', 'source': 'object', 'ppg': 'float'},
+                compression='gzip',
+            )
             MyLogger.print_and_log('Loaded prices from flat file', pricer_loc)
         else:
             MyLogger.print_and_log('Buyables file does not exist: {}'.format(file_name), pricer_loc)
 
-    def lookup_smiles(self, smiles, alreadyCanonical=False, isomericSmiles=True):
+    def lookup_smiles(self, smiles, source=None, alreadyCanonical=False, isomericSmiles=True):
         """
         Looks up a price by SMILES. Canonicalize smiles string unless 
         the user specifies that the smiles string is definitely already 
         canonical. If the DB connection does not exist, look up from 
         prices dictionary attribute, otherwise lookup from DB.
         If multiple entries exist in the DB, return the lowest price.
+
+        Args:
+            smiles (str): SMILES string to look up
+            source (list or str, optional): buyables sources to consider;
+                if ``None`` (default), include all sources, otherwise
+                must be single source or list of sources to consider;
+            alreadyCanonical (bool, optional): whether SMILES string is already
+                canonical; if ``False`` (default), SMILES will be canonicalized
+            isomericSmiles (bool, optional): whether to generate isomeric
+                SMILES string when performing canonicalization
         """
         if not alreadyCanonical:
             mol = Chem.MolFromSmiles(smiles)
@@ -93,14 +97,36 @@ class Pricer:
                 return 0.
             smiles = Chem.MolToSmiles(mol, isomericSmiles=isomericSmiles)
 
+        if source == []:
+            # If no sources are allowed, there is no need to perform lookup
+            # Empty list is checked explicitly here, since None means source
+            # will not be included in query, and '' is a valid source value
+            return 0.0
+
         if self.use_db:
-            cursor = self.BUYABLES_DB.find({
-                'smiles': smiles,
-                'source': {'$ne': 'LN'}
-            })
+            query = {'smiles': smiles}
+
+            if source is not None:
+                if isinstance(source, list):
+                    query['source'] = {'$in': source}
+                else:
+                    query['source'] = source
+
+            cursor = self.BUYABLES_DB.find(query)
             return min([doc['ppg'] for doc in cursor], default=0.0)
+        elif self.prices is not None:
+            query = self.prices['smiles'] == smiles
+
+            if source is not None:
+                if isinstance(source, list):
+                    query = query & (self.prices['source'].isin(source))
+                else:
+                    query = query & (self.prices['source'] == source)
+
+            results = self.prices.loc[query]
+            return min(results['ppg'], default=0.0)
         else:
-            return self.prices[smiles]
+            return 0.0
 
 
 if __name__ == '__main__':

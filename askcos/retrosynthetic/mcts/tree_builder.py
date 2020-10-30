@@ -6,6 +6,7 @@ import time
 from collections import defaultdict
 from multiprocessing import Process, Manager, Queue
 
+import networkx as nx
 import numpy as np
 import rdkit.Chem as Chem
 from pymongo import MongoClient
@@ -14,11 +15,15 @@ import askcos.global_config as gc
 from askcos.retrosynthetic.mcts.nodes import Chemical, Reaction, ChemicalTemplateApplication
 from askcos.retrosynthetic.transformer import RetroTransformer
 from askcos.utilities.buyable.pricer import Pricer
+from askcos.utilities.descriptors import rms_molecular_weight, number_of_rings
 from askcos.utilities.formats import chem_dict, rxn_dict
 from askcos.utilities.io.logger import MyLogger
 from askcos.utilities.historian.chemicals import ChemHistorian
+from askcos.prioritization.precursors.scscore import SCScorePrecursorPrioritizer
 from askcos.prioritization.templates.relevance import RelevanceTemplatePrioritizer
 from askcos.synthetic.evaluation.fast_filter import FastFilterScorer
+
+from .utils import chem_to_nx_graph, nx_graph_to_paths, nx_paths_to_json
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
@@ -51,9 +56,11 @@ class MCTS:
 
     """
 
-    def __init__(self, retroTransformer=None, pricer=None, max_branching=20, max_depth=3, expansion_time=60,
+    def __init__(self, retroTransformer=None, pricer=None, scscorer=None,
+                 max_branching=20, max_depth=3, expansion_time=60,
                  chemhistorian=None, nproc=8, num_active_pathways=None, template_set='reaxys',
                  template_prioritizer='reaxys', precursor_prioritizer='relevanceheuristic', fast_filter='default',
+                 pathway_ranker=None,
                  **kwargs):
         """
         Initialization of an object of the MCTS class.
@@ -71,6 +78,9 @@ class MCTS:
                 checking stop criteria (buyability). If None, will be
                 initialized using default settings from the global
                 configuration. (default: {None})
+            scscorer (None or SCScorePrecursorPrioritizer, optional): SCScore
+                instance for evaluating termination criteria. If None, will be
+                loaded using default settings. (default: {None})
             max_branching (int, optional): Maximum number of precursor
                 suggestions to add to the tree at each expansion.
                 (default: {20})
@@ -88,6 +98,16 @@ class MCTS:
                 global configuration. (default: {None})
             num_active_pathways (None or int, optional): Number of active
                 pathways. If None, will be set to ``nproc``. (default: {None})
+            template_prioritizer (str, optional): Specifies which template
+                prioritizer to use. (default: {'reaxys'})
+            template_set (str, optional): Specifies which template set to use.
+                (default: {'reaxys'})
+            precursor_prioritizer (str, optional): Specify precursor prioritizer
+                to be used. (default: {'relevanceheuristic'})
+            fast_filter (str, optional): Specify fast filter to be used for
+                scoring reactions. (default: {'default'})
+            pathway_ranker (method, optional): Provide a method for ranking and
+                clustering pathways. Uses ``PathwayRanker`` if unspecified.
         """
 
         if 'chiral' in kwargs and not kwargs['chiral']:
@@ -109,20 +129,24 @@ class MCTS:
         self.filter_threshold = None
         self.apply_fast_filter = None
         self.max_ppg = None
-        self.max_natom_dict = None
-        self.min_chemical_history_dict = None
+        self.max_scscore = None
+        self.max_elements = None
+        self.min_history = None
+        self.termination_logic = None
+        self.buyables_source = None
 
         # Load data and models
         self.pricer = pricer or self.load_pricer(kwargs.get('use_db', False))
+        self.scscorer = scscorer or self.load_scscorer(pricer=self.pricer)
         self.chemhistorian = chemhistorian or self.load_chemhistorian(kwargs.get('use_db', False))
         self.retroTransformer = retroTransformer or self.load_retro_transformer(
-            use_db=kwargs.get('use_db', False),
             template_set=template_set,
             precursor_prioritizer=precursor_prioritizer,
         )
         # The template prioritizer and fast filter are TF models which must be loaded in each child process
         self.template_prioritizer = template_prioritizer
         self.fast_filter = fast_filter
+        self.pathway_ranker = pathway_ranker  # Loaded during path enumeration if needed
 
         # Initialize vars, reset dicts, etc.
         self.reset(soft_reset=False)
@@ -140,6 +164,15 @@ class MCTS:
         return pricer
 
     @staticmethod
+    def load_scscorer(pricer=None):
+        """
+        Loads pricer.
+        """
+        scscorer = SCScorePrecursorPrioritizer(pricer=pricer)
+        scscorer.load_model(model_tag='1024bool')
+        return scscorer
+
+    @staticmethod
     def load_chemhistorian(use_db):
         """
         Loads chemhistorian.
@@ -149,12 +182,11 @@ class MCTS:
         return chemhistorian
 
     @staticmethod
-    def load_retro_transformer(use_db, template_set='reaxys', precursor_prioritizer='relevanceheuristic'):
+    def load_retro_transformer(template_set='reaxys', precursor_prioritizer='relevanceheuristic'):
         """
         Loads retro transformer model.
         """
         retro_transformer = RetroTransformer(
-            use_db=use_db,
             template_set=template_set,
             template_prioritizer=None,
             precursor_prioritizer=precursor_prioritizer,
@@ -426,7 +458,7 @@ class MCTS:
                             self.Chemicals[smi] = Chemical(smi)
                             self.Chemicals[smi].set_template_relevance_probs(top_probs, top_indices, value)
 
-                            ppg = self.pricer.lookup_smiles(smi, alreadyCanonical=True)
+                            ppg = self.pricer.lookup_smiles(smi, source=self.buyables_source, alreadyCanonical=True)
                             self.Chemicals[smi].purchase_price = ppg
 
                             hist = self.chemhistorian.lookup_smiles(smi, alreadyCanonical=True, template_set=self.template_set)
@@ -782,7 +814,7 @@ class MCTS:
             hist = self.chemhistorian.lookup_smiles(self.smiles, alreadyCanonical=False)
             self.Chemicals[self.smiles].as_reactant = hist['as_reactant']
             self.Chemicals[self.smiles].as_product = hist['as_product']
-            ppg = self.pricer.lookup_smiles(self.smiles, alreadyCanonical=False)
+            ppg = self.pricer.lookup_smiles(self.smiles, source=self.buyables_source, alreadyCanonical=False)
             self.Chemicals[self.smiles].purchase_price = ppg
 
             # First selection is all the same
@@ -817,20 +849,23 @@ class MCTS:
         initialize the tree search.
         """
         template_prioritizer = self.load_template_prioritizer(self.template_prioritizer)
-        return template_prioritizer.predict(self.smiles, self.template_count, self.max_cum_template_prob)
+        scores, indices = template_prioritizer.predict(self.smiles, self.template_count, self.max_cum_template_prob)
+        return scores, indices
 
-    # QUESTION: Why return the empty list?
     def tree_status(self):
-        """Summarize size of tree after expansion.
+        """
+        Summarize statistics for tree exploration.
 
         Returns:
-            (int, int):
+            (int, int, int):
                 num_chemicals (int): Number of chemical nodes in the tree.
                 num_reactions (int): Number of reaction nodes in the tree.
+                num_templates (int): Total number of applied templates.
         """
         num_chemicals = len(self.Chemicals)
-        num_reactions = len(self.status)
-        return num_chemicals, num_reactions, []
+        num_reactions = sum(len(cta.reactions) for chem in self.Chemicals.values() for cta in chem.template_idx_results.values())
+        num_templates = len(self.status)
+        return num_chemicals, num_reactions, num_templates
 
     def return_trees(self):
         """Returns retrosynthetic pathways trees and their size."""
@@ -847,27 +882,6 @@ class MCTS:
                 'ppg': self.Chemicals[smi].purchase_price,
                 'as_reactant': self.Chemicals[smi].as_reactant,
                 'as_product': self.Chemicals[smi].as_product,
-            }
-
-        def tid_list_to_info_dict(tids):
-            """
-            Returns dict of info from a given list of templates.
-
-                Args:
-                    tids (list of int): Template IDs to get info about.
-            """
-            if self.retroTransformer.load_all or not self.retroTransformer.use_db:
-                templates = [self.retroTransformer.templates[tid] for tid in tids]
-            else:
-                templates = list(self.retroTransformer.TEMPLATE_DB.find({
-                    'index': {'$in': tids},
-                    'template_set': self.template_set,
-                }))
-
-            return {
-                'tforms': [str(t.get('_id', -1)) for t in templates],
-                'num_examples': int(sum([t.get('count', 1) for t in templates])),
-                'necessary_reagent': templates[0].get('necessary_reagent', ''),
             }
 
         seen_rxnsmiles = {}
@@ -929,7 +943,7 @@ class MCTS:
                         for path in DLS_rxn(chem_smi, tid, rct_smi, depth):
                             yield [rxn_dict(rxnsmiles_to_id(rxn_smiles), rxn_smiles, children=path,
                                             plausibility=rxn.plausibility, template_score=rxn.template_score,
-                                            **tid_list_to_info_dict(rxn.tforms))]
+                                            **self.retroTransformer.retrieve_template_metadata(rxn.tforms, template_set=self.template_set))]
                         done_children_of_this_chemical.append(rxn_smiles)
 
         def DLS_rxn(chem_smi, template_idx, rct_smi, depth):
@@ -1068,8 +1082,10 @@ class MCTS:
                           forbidden_molecules=None,
                           template_count=100,
                           max_cum_template_prob=0.995,
-                          max_natom_dict=None,
-                          min_chemical_history_dict=None,
+                          max_scscore=None,
+                          max_elements=None,
+                          min_history=None,
+                          termination_logic=None,
                           apply_fast_filter=True,
                           filter_threshold=0.75,
                           soft_reset=False,
@@ -1077,6 +1093,8 @@ class MCTS:
                           sort_trees_by='plausibility',
                           template_prioritizer='reaxys',
                           template_set='reaxys',
+                          buyables_source=None,
+                          pathway_ranker=None,
                           **kwargs):
         """Returns trees with path ending in buyable chemicals.
 
@@ -1107,14 +1125,18 @@ class MCTS:
                 to consider. (default: {100})
             max_cum_template_prob (float, optional): Maximum cumulative
                 probability of selected relevant templates. (default: {0.995})
-            max_natom_dict (defaultdict, optional): Specifies maximum amounts
-                for certain atoms and the logic it should use to select a
-                chemical (buyable, buyable or max atoms, buyable and max atoms).
-                (default: None)
-            min_chemical_history_dict (dict, optional): Minimum number of times
-                a chemical must appear as a reactant or product to be selected
-                when logic is "OR" and chemical is not buyable.
-                (default: None)
+            max_scscore (int, optional): Maximum synthetic complexity score for
+                a chemical to be considered terminal. (default: {None})
+            max_elements (dict, optional): Maximum number of certain elements
+                for a chemical to be considered terminal. (default: {None})
+            min_history (dict, optional): Minimum number of prior appearances
+                as a reactant or product for a chemical to be considered
+                terminal. (default: {None})
+            termination_logic (dict, optional): Defines logic to be used when
+                determining if a chemical is terminal. Should contain two keys,
+                ['and', 'or'], and list of criteria as values. Supported
+                criteria: ['buyable', 'max_ppg', 'max_scscore', 'max_elements',
+                'max_history']. (default: {None})
             apply_fast_filter (bool, optional): Whether to apply the fast
                 filter. (default: {True})
             filter_threshold (float, optional): Threshold to use for the fast
@@ -1127,14 +1149,18 @@ class MCTS:
                 (default: {'plausibility'})
             template_prioritizer (str, optional): Specifies which template
                 prioritizer to use. (default: {'reaxys'})
+            template_set (str, optional): Specifies which template set to use.
+                (default: {'reaxys'})
+            buyables_source (str or list, optional): Specifies source of buyables
+                data to use. Will use all available data if not provided.
+            pathway_ranker (method, optional): Provide a method for ranking and
+                clustering pathways. Uses ``PathwayRanker`` if unspecified.
             **kwargs: Additional optional arguments.
 
         Returns:
-            ((int, int, dict), list of dict):
-                tree_status ((int, int, dict)): Result of tree_status().
-
-                trees (list of dict): List of dictionaries, where each dictionary
-                    defines a synthetic route.
+            trees (list of dict): List of synthetic routes as networkx json
+            tree_status ((int, int, int)): Result of ``tree_status``.
+            graph (dict): Full explored graph as networkx node link json
         """
         self.smiles = smiles
         self.max_depth = max_depth
@@ -1149,21 +1175,24 @@ class MCTS:
         self.apply_fast_filter = apply_fast_filter
 
         self.max_ppg = max_ppg
-        self.max_natom_dict = max_natom_dict
-        self.min_chemical_history_dict = min_chemical_history_dict
+        self.max_scscore = max_scscore
+        self.max_elements = max_elements
+        self.min_history = min_history
+        self.termination_logic = termination_logic if termination_logic is not None else {'and': ['buyable']}
+        self.buyables_source = buyables_source
 
         self.sort_trees_by = sort_trees_by
         self.template_prioritizer = template_prioritizer
         self.template_set = template_set
+        self.pathway_ranker = pathway_ranker
 
         known_bad_reactions = known_bad_reactions or []
         forbidden_molecules = forbidden_molecules or []
 
         MyLogger.print_and_log('Active pathway #: {}'.format(num_active_pathways), treebuilder_loc)
 
-        if (self.min_chemical_history_dict is not None
-                and self.min_chemical_history_dict['logic'] not in [None, 'none']
-                and self.chemhistorian is None):
+        if (self.chemhistorian is None and self.min_history is not None
+                and ('min_history' in self.termination_logic['and'] or 'min_history' in self.termination_logic['or'])):
             self.chemhistorian = self.load_chemhistorian(kwargs.get('use_db', False))
 
         self.reset(soft_reset=soft_reset)
@@ -1175,65 +1204,180 @@ class MCTS:
                         return_first=return_first,
                         )
 
-        return self.return_trees()
+        if return_first:
+            kwargs['score_trees'] = kwargs['cluster_trees'] = False
+
+        paths = self.enumerate_paths(**kwargs)
+        status = self.tree_status()
+        graph = nx.node_link_data(self.tree)
+
+        return paths, status, graph
 
     def is_a_terminal_node(self, smiles, ppg, hist):
         """
         Determine if the specified chemical is a terminal node in the tree based
         on pre-specified criteria.
 
-        The current setup uses ppg as a mandatory criteria, with atom counts and
-        chemical history data being optional, additional criteria.
+        Criteria to be considered are specified via ``self.termination_logic``,
+        and the thresholds for each criteria are specified separately.
+
+        If no criteria are specified, will always return ``False``.
 
         Args:
             smiles (str): smiles string of the chemical
             ppg (float): cost of the chemical
             hist (dict): historian data for the chemical
         """
-        # Default to False
-        is_terminal = False
+        def buyable():
+            return bool(ppg)
 
-        if self.max_ppg is not None:
-            is_buyable = ppg and (ppg <= self.max_ppg)
-            is_terminal = is_buyable
+        def max_ppg():
+            if self.max_ppg is not None:
+                # ppg of 0 means not buyable
+                return ppg is not None and 0 < ppg <= self.max_ppg
+            return True
 
-        if self.max_natom_dict is not None:
-            # Get structural properties
-            mol = Chem.MolFromSmiles(smiles)
-            if mol:
-                natom_dict = defaultdict(lambda: 0)
-                for a in mol.GetAtoms():
-                    natom_dict[a.GetSymbol()] += 1
-                natom_dict['H'] = sum(a.GetTotalNumHs() for a in mol.GetAtoms())
-                is_small_enough = all(natom_dict[k] <= v for k, v in self.max_natom_dict.items() if k != 'logic')
+        def max_scscore():
+            if self.max_scscore is not None:
+                scscore = self.scscorer.get_score_from_smiles(smiles, noprice=True)
+                return scscore <= self.max_scscore
+            return True
 
-                if self.max_natom_dict['logic'] == 'or':
-                    is_terminal = is_terminal or is_small_enough
-                elif self.max_natom_dict['logic'] == 'and':
-                    is_terminal = is_terminal and is_small_enough
+        def max_elements():
+            if self.max_elements is not None:
+                # Get structural properties
+                mol = Chem.MolFromSmiles(smiles)
+                if mol:
+                    elem_dict = defaultdict(lambda: 0)
+                    for a in mol.GetAtoms():
+                        elem_dict[a.GetSymbol()] += 1
+                    elem_dict['H'] = sum(a.GetTotalNumHs() for a in mol.GetAtoms())
 
-        if self.min_chemical_history_dict is not None:
-            is_popular_enough = hist['as_reactant'] >= self.min_chemical_history_dict['as_reactant'] or \
-                                hist['as_product'] >= self.min_chemical_history_dict['as_product']
+                    return all(elem_dict[k] <= v for k, v in self.max_elements.items())
+            return True
 
-            if self.min_chemical_history_dict['logic'] == 'or':
-                is_terminal = is_terminal or is_popular_enough
-            elif self.min_chemical_history_dict['logic'] == 'and':
-                is_terminal = is_terminal and is_popular_enough
+        def min_history():
+            if self.min_history is not None:
+                return hist is not None and (hist['as_reactant'] >= self.min_history['as_reactant'] or
+                                             hist['as_product'] >= self.min_history['as_product'])
+            return True
 
-        return is_terminal
+        local_dict = locals()
+        or_criteria = self.termination_logic.get('or')
+        and_criteria = self.termination_logic.get('and')
+
+        return (bool(or_criteria) and any(local_dict[criteria]() for criteria in or_criteria) or
+                bool(and_criteria) and all(local_dict[criteria]() for criteria in and_criteria))
 
     def return_chemical_results(self):
         results = defaultdict(list)
         for chemical in self.Chemicals.values():
-            if not chemical.template_idx_results:
-                results[chemical.smiles]
             for cta in chemical.template_idx_results.values():
                 for res in cta.reactions.values():
                     reaction = vars(res)
                     reaction['pathway_count'] = int(reaction['pathway_count'])
                     results[chemical.smiles].append(reaction)
         return dict(results)
+
+    def get_graph(self):
+        """
+        Convert tree builder results to networkx graph.
+        """
+        graph = chem_to_nx_graph(list(self.Chemicals.values()))
+        self.update_reaction_data(graph)
+
+        # Remove unnecessary attributes
+        attr_to_keep = {
+            'smiles',
+            'type',
+            'purchase_price',
+            'as_reactant',
+            'as_product',
+            'terminal',
+            'plausibility',
+            'template_score',
+            'tforms',
+            'num_examples',
+            'necessary_reagent',
+            'precursor_smiles',
+            'rms_molwt',
+            'num_rings',
+            'scscore',
+            'rank',
+        }
+        for node, node_data in graph.nodes.items():
+            attr_to_remove = [attr for attr in node_data if attr not in attr_to_keep]
+            for attr in attr_to_remove:
+                del node_data[attr]
+
+        return graph
+
+    def enumerate_paths(self, path_format='json', json_format='treedata', validate_paths=True, **kwargs):
+        """
+        Return list of paths to buyables starting from the target node.
+
+        Args:
+            path_format (str, optional): pathway output format, supports 'graph' or 'json'
+            json_format (str, optional): networkx json format, supports 'treedata' or 'nodelink'
+            validate_paths (bool, optional): require all leaves to meet terminal criteria
+
+        Returns:
+            list of paths in specified format
+        """
+        self.tree = self.get_graph()
+
+        self.paths, self.target_uuid = nx_graph_to_paths(
+            self.tree,
+            self.smiles,
+            max_depth=self.max_depth,
+            max_trees=self.max_trees,
+            sorting_metric=self.sort_trees_by,
+            validate_paths=validate_paths,
+            pathway_ranker=self.pathway_ranker,
+            **kwargs
+        )
+
+        MyLogger.print_and_log('Found {0} paths to buyable chemicals.'.format(len(self.paths)), treebuilder_loc)
+
+        if path_format == 'graph':
+            paths = self.paths
+        elif path_format == 'json':
+            paths = nx_paths_to_json(self.paths, self.target_uuid, json_format=json_format)
+        else:
+            raise ValueError('Unrecognized format type {0}'.format(path_format))
+
+        return paths
+
+    def update_reaction_data(self, graph):
+        """
+        Update metadata for all reaction nodes.
+
+        Adds the following fields:
+            * rank
+            * tforms
+            * num_examples
+            * necessary_reagent
+            * precursor_smiles
+            * num_rings
+            * scscore
+        """
+        for node, node_data in graph.nodes.items():
+            if node_data['type'] == 'chemical':
+                reactions = sorted(graph.successors(node),
+                                   key=lambda x: graph.nodes[x]['template_score'],
+                                   reverse=True)
+                for i, rxn in enumerate(reactions):
+                    graph.nodes[rxn]['rank'] = i + 1
+            else:
+                template_ids = node_data['tforms']
+                info = self.retroTransformer.retrieve_template_metadata(template_ids, template_set=self.template_set)
+                node_data.update(info)
+
+                precursor_smiles = node.split('>>')[0]
+                node_data['precursor_smiles'] = precursor_smiles
+                node_data['rms_molwt'] = rms_molecular_weight(precursor_smiles)
+                node_data['num_rings'] = number_of_rings(precursor_smiles)
+                node_data['scscore'] = self.scscorer.get_score_from_smiles(precursor_smiles, noprice=True)
 
 
 if __name__ == '__main__':
@@ -1267,7 +1411,7 @@ if __name__ == '__main__':
                                            expansion_time=30,
                                            max_cum_template_prob=0.995,
                                            template_count=100,
-                                           # min_chemical_history_dict={'as_reactant':5, 'as_product':5,'logic':'none'},
+                                           # min_history={'as_reactant':5, 'as_product':5,'logic':'none'},
                                            soft_reset=False,
                                            soft_stop=False)
     print(status)

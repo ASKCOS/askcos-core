@@ -70,6 +70,7 @@ forward_scoring = network
 data_path = os.path.join(os.path.dirname(__file__),'data')
 local_db_dumps = os.path.join(data_path, 'local_db_dumps')
 models_path = os.path.join(data_path, 'models')
+scalers_path = os.path.join(data_path, 'scalers')
 
 fingerprint_bits = 256
 reaction_fingerprint_bits = 2048
@@ -81,14 +82,13 @@ database = 'askcos'
 # Define databases (should be nonessential if all local files present)
 ################################################################################
 
-MONGO_HOST = os.environ.get('MONGO_HOST', 'MONGO_HOST')
-MONGO_USER = os.environ.get('MONGO_USER', 'USERNAME')
-MONGO_PW = os.environ.get('MONGO_PW', 'PASSWORD')
-
 MONGO = {
-    'path': 'mongodb://{}:{}@{}'.format(MONGO_USER, MONGO_PW, MONGO_HOST),
-    'id': 27017,
-    'connect': False
+    'host': os.environ.get('MONGO_HOST'),
+    'port': int(os.environ.get('MONGO_PORT', 27017)),
+    'username': os.environ.get('MONGO_USER'),
+    'password': os.environ.get('MONGO_PW'),
+    'authSource': os.environ.get('MONGO_AUTH_DB', 'admin'),
+    'connect': False,
 }
 
 RETRO_TEMPLATES = {
@@ -172,10 +172,17 @@ SELECTIVITY = {
 }
 
 GEN_SELECTIVITY = {
-    'model_path': os.path.join(models_path, 'selectivity', 'general_selectivity', 'best_model.hdf5'),
-    'initializer': '[CH4:1]>>[CH4:1]',
-    'atom_fdim': 82,
-    'bond_fdim': 6,
-    'max_nb': 10,
-    'binary_fdim': 11,
+    'model_path': {'GNN': os.path.join(models_path, 'selectivity', 'general_selectivity', 'GNN_best_model.hdf5'),
+                   'QM_GNN': os.path.join(models_path, 'selectivity', 'general_selectivity', 'QM_GNN_best_model.hdf5'),
+                   'QM_GNN_no_reagent': os.path.join(models_path, 'selectivity', 'general_selectivity', 'QM_GNN_best_model_no_reagent.hdf5')
+                   },
+    'scalers': os.path.join(scalers_path, 'QM_desc_selec.pickle'),
+}
+
+PATHWAY_RANKER = {
+    'model_path': os.path.join(models_path, 'pathway_ranker', 'treeLSTM512-fp2048.pt')
+}
+
+DESCRIPTORS = {
+    'model_path': os.path.join(models_path, 'descriptors', 'QM_137k.pt')
 }

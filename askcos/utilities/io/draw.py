@@ -13,6 +13,8 @@ import os
 import re
 import io
 
+# Disable cairo drawing backend for RDKit
+delattr(Draw.rdMolDraw2D, 'MolDraw2DCairo')
 
 
 def get_scaled_drawer(mol):
@@ -453,7 +455,7 @@ def TransformStringToImage(transform, retro=True, **kwargs):
         new_tag = old_tag.replace(']', ':0]')
         transform = transform.replace(old_tag, new_tag)
     rxn = AllChem.ReactionFromSmarts(transform)
-    return ReactionToImage(rxn, dummyAtoms=True, options=options, retro=retro, **kwargs)
+    return ReactionToImage(rxn, dummyAtoms=True, kekulize=False, options=options, retro=retro, **kwargs)
 
 
 def MolsSmilesToImage(smiles, options=None, clear_map=True, **kwargs):

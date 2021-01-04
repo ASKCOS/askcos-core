@@ -258,7 +258,7 @@ def score_paths(paths, cluster_trees=False, pathway_ranker=None, **kwargs):
 
     # Count how many scorable paths there are
     num_paths = sum(1 for path in graph_paths if path.graph['depth'] > 1)
-    if num_paths == 0:
+    if num_paths <= 1:
         # There's nothing to score
         return graph_paths
 

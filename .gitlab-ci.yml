@@ -4,8 +4,7 @@ services:
   - docker:dind
 
 variables:
-  DOCKER_HOST: tcp://docker:2375
-  DOCKER_DRIVER: overlay2
+  DOCKER_TLS_CERTDIR: "/certs"
 
 before_script:
   - apk add git make
@@ -14,6 +13,8 @@ before_script:
 
 build-dev:  # build dev branch for continuous deployment
   stage: build
+  tags:
+    - askcos
   script:
     - make push VERSION=$(git describe --tags --always) REGISTRY=$CI_REGISTRY_IMAGE TAG=dev DATA_VERSION=dev
   only:
@@ -21,6 +22,8 @@ build-dev:  # build dev branch for continuous deployment
 
 build-latest:  # build latest version of the master branch
   stage: build
+  tags:
+    - askcos
   script:
     - make push VERSION=$(git describe --tags --abbrev=0) REGISTRY=$CI_REGISTRY_IMAGE TAG=latest DATA_VERSION=latest
   only:
@@ -28,6 +31,8 @@ build-latest:  # build latest version of the master branch
 
 build-release:  # build all releases, as determined by tags
   stage: build
+  tags:
+    - askcos
   script:
     - make push VERSION=$CI_COMMIT_TAG REGISTRY=$CI_REGISTRY_IMAGE TAG=$CI_COMMIT_TAG DATA_VERSION=$CI_COMMIT_TAG
   only:

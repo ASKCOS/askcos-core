@@ -295,10 +295,12 @@ class ImpurityPredictor:
             for i in range(min(self.topn_outcome, len(outcomes[0]))):
                 psmi = outcomes[0][i]['outcome']['smiles']
 
-                ###try using the forward predictor score to indicate the likelihood of the impurities
-                # insp_score = self.inspector(rsmi + '>>' + psmi)
-                #temporarily skip the inspecting step， and using forward prediction score as the inspection score
-                insp_score=outcomes[0][i]['prob']
+                if self.inspector is not None:
+                    insp_score = self.inspector(rsmi + '>>' + psmi)
+                else:
+                    # Use forward prediction score as the inspection score
+                    insp_score = outcomes[0][i]['prob']
+
                 if insp_score > self.insp_threshold:
                     inspected_outcomes.append({'smiles': psmi,
                                                'pred_rank': outcomes[0][i]['rank'],

@@ -36,6 +36,7 @@ rank = 'Rank'
 # For context recommendation
 nearest_neighbor = 'Nearest_Neighbor'
 neural_network = 'Neural_Network'
+context_neural_network_v2 = 'Neural_Network_V2'
 
 # For forward prediction
 template = 'Template'
@@ -160,6 +161,35 @@ NEURALNET_CONTEXT_REC = {
     'model_path': os.path.join(models_path, 'context', 'NeuralNet_Cont_Model', 'model.json'),
     'weights_path': os.path.join(models_path, 'context', 'NeuralNet_Cont_Model', 'weights.h5'),
     'database': database,
+}
+
+_CONTEXT_V2_MODEL_PATH = os.path.join(models_path, 'context', 'v2')
+CONTEXT_V2 = {
+    'reagent_conv_rules': os.path.join(_CONTEXT_V2_MODEL_PATH, 'stage0', 'reagent_conv_rules.json'),
+    'default-models': {
+        'graph': 'graph-20191118',
+        'fp': 'fp-20191118',
+    },
+    'models': {
+        'fp-20191118': {
+            'fp_len': 16384,
+            'fp_rad': 2,
+            'reagents': os.path.join(_CONTEXT_V2_MODEL_PATH, 'stage0', 'reagents_list_minocc100.json'),
+            'reagents_model': os.path.join(_CONTEXT_V2_MODEL_PATH, 'stage1', 'fp_multicategorical_50_input_reagents_fplength16384_fpradius3', 'model-densegraph-04-4.18.hdf5.final-tf.20191118'),
+            'temperature_model': os.path.join(_CONTEXT_V2_MODEL_PATH, 'stage2', '50_temperature_regression_fp_baseline', 'model-densegraph-24-0.02.hdf5.final-tf.20191118'),
+            'reagents_amount_model': os.path.join(_CONTEXT_V2_MODEL_PATH, 'stage3', '50_amount_regression_fp_baseline', 'model-densegraph-12-0.00.hdf5.final-tf.20191118'),
+            'reactants_amount_model': os.path.join(_CONTEXT_V2_MODEL_PATH, 'stage3', '50_amount_reactant_regression_fp_baseline_dense2048_3', 'model-densegraph-24-0.05.hdf5.final-tf.20191118'),
+        },
+        'graph-20191118': {
+            'encoder': os.path.join(_CONTEXT_V2_MODEL_PATH, 'stage0', 'feature-statistics-final-s-natom50.pickle'),
+            'reagents': os.path.join(_CONTEXT_V2_MODEL_PATH, 'stage0', 'reagents_list_minocc100.json'),
+            'reagents_model': os.path.join(_CONTEXT_V2_MODEL_PATH, 'stage1', '50_multicategorical_input_reagents_wlnlen512_wlnstep3', 'model-densegraph-08-4.08.hdf5.final-tf.20191118'),
+            'temperature_model': os.path.join(_CONTEXT_V2_MODEL_PATH, 'stage2', '50_temperature_regression', 'model-densegraph-16-0.02.hdf5.final-tf.20191118'),
+            'reagents_amount_model': os.path.join(_CONTEXT_V2_MODEL_PATH, 'stage3', '50_amount_regression', 'model-densegraph-08-0.00.hdf5.final-tf.20191118'),
+            'reactants_amount_model': os.path.join(_CONTEXT_V2_MODEL_PATH, 'stage3', '50_amount_reactant_regression_dense2048_3', 'model-densegraph-08-0.05.hdf5.final-tf.20191118'),
+            'condensed_graph': True,
+        },
+    },
 }
 
 TEMPLATE_FREE_FORWARD_PREDICTOR = {

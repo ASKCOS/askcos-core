@@ -13,7 +13,7 @@ import socket, pickle
 class ImpurityPredictor:
 
     def __init__(self, predictor, inspector, mapper,
-                 topn_outcome=3, insp_threshold=0.75, celery_task=None, check_mapping=True):
+                 topn_outcome=3, insp_threshold=0.2, celery_task=None, check_mapping=True):
         """
 
         :param predictor:
@@ -295,7 +295,12 @@ class ImpurityPredictor:
             for i in range(min(self.topn_outcome, len(outcomes[0]))):
                 psmi = outcomes[0][i]['outcome']['smiles']
 
-                insp_score = self.inspector(rsmi + '>>' + psmi)
+                if self.inspector is not None:
+                    insp_score = self.inspector(rsmi + '>>' + psmi)
+                else:
+                    # Use forward prediction score as the inspection score
+                    insp_score = outcomes[0][i]['prob']
+
                 if insp_score > self.insp_threshold:
                     inspected_outcomes.append({'smiles': psmi,
                                                'pred_rank': outcomes[0][i]['rank'],
@@ -447,17 +452,18 @@ class ImpurityPredictor:
 
 if __name__ == '__main__':
     from askcos.synthetic.evaluation.template_free import TemplateFreeNeuralNetScorer
-    from askcos.synthetic.evaluation.fast_filter import FastFilterScorer
+    # from askcos.synthetic.evaluation.fast_filter import FastFilterScorer
     from askcos.synthetic.atom_mapper.wln_mapper import WLN_AtomMapper
 
     #
     predictor = TemplateFreeNeuralNetScorer().evaluate
-    inspector = FastFilterScorer().evaluate_reaction_score
+    # inspector = FastFilterScorer().evaluate_reaction_score
+    inspector = None
     mapper = WLN_AtomMapper().evaluate
     # %%
-    pe = ImpurityPredictor(predictor, inspector, mapper, 1, 0.75, check_mapping=True)
+    pe = ImpurityPredictor(predictor, inspector, mapper, 3, 0.2, check_mapping=True)
 
-    rct_smi = 'CC(C)(C)OC(=O)N1CCC(N)CC1.O=C(O)c1cccc2oc(-c3ccccc3)nc12'
+    rct_smi = 'Oc1ccc(Br)cc1.Sc1cccc(Br)c1'
 
     prd_smi = ''
     sol_smi = ''
@@ -466,3 +472,5 @@ if __name__ == '__main__':
                           products=prd_smi,
                           reagents=rea_smi,
                           solvents=sol_smi)
+
+    print(outcomes['predict_expand'][:5])

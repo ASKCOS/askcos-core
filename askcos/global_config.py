@@ -6,6 +6,8 @@ DEBUG = False
 # Whether to preload all templates for the retrotransformer
 PRELOAD_TEMPLATES = False
 
+BAN_LIST_PATH = os.path.join(os.path.dirname(__file__), 'utilities', 'banned', 'banned_list.json')
+
 ################################################################################
 # Options for different modules, defined as strings
 ################################################################################

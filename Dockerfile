@@ -1,9 +1,9 @@
 ARG BASE_VERSION=2019.03.4-gh2855-py35
 ARG DATA_VERSION=dev
 
-FROM registry.gitlab.com/mlpds_mit/askcos/askcos-data:$DATA_VERSION as data
+FROM askcos/askcos-data:$DATA_VERSION as data
 
-FROM registry.gitlab.com/mlpds_mit/askcos/askcos-base:$BASE_VERSION
+FROM askcos/askcos-base:$BASE_VERSION
 
 RUN apt-get update && \
     apt-get install -y libboost-thread-dev libboost-python-dev libboost-iostreams-dev python-tk libopenblas-dev libeigen3-dev libcairo2-dev pkg-config python-dev python-mysqldb && \

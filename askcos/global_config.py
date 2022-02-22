@@ -174,13 +174,13 @@ CONTEXT_V2 = {
     },
     'models': {
         'fp-20191118': {
-            'fp_len': 16384,
-            'fp_rad': 2,
+            'fp_len': 2048,
+            'fp_rad': 3,
             'reagents': os.path.join(_CONTEXT_V2_MODEL_PATH, 'stage0', 'reagents_list_minocc100.json'),
-            'reagents_model': os.path.join(_CONTEXT_V2_MODEL_PATH, 'stage1', 'fp_multicategorical_50_input_reagents_fplength16384_fpradius3', 'model-densegraph-04-4.18.hdf5.final-tf.20191118'),
-            'temperature_model': os.path.join(_CONTEXT_V2_MODEL_PATH, 'stage2', '50_temperature_regression_fp_baseline', 'model-densegraph-24-0.02.hdf5.final-tf.20191118'),
-            'reagents_amount_model': os.path.join(_CONTEXT_V2_MODEL_PATH, 'stage3', '50_amount_regression_fp_baseline', 'model-densegraph-12-0.00.hdf5.final-tf.20191118'),
-            'reactants_amount_model': os.path.join(_CONTEXT_V2_MODEL_PATH, 'stage3', '50_amount_reactant_regression_fp_baseline_dense2048_3', 'model-densegraph-24-0.05.hdf5.final-tf.20191118'),
+            'reagents_model': os.path.join(_CONTEXT_V2_MODEL_PATH, 'stage1', 'fp_multicategorical_50_input_reagents_fplength2048_fpradius3', 'model-densegraph-04-4.27.hdf5.final-tf.20191118'),
+            'temperature_model': os.path.join(_CONTEXT_V2_MODEL_PATH, 'stage2', '50_temperature_regression_fp_baseline_fp2048', 'model-densegraph-40-0.02.hdf5.final-tf.20191118'),
+            'reagents_amount_model': os.path.join(_CONTEXT_V2_MODEL_PATH, 'stage3', '50_amount_regression_fp_baseline_fp2048', 'model-densegraph-48-0.00.hdf5.final-tf.20191118'),
+            'reactants_amount_model': os.path.join(_CONTEXT_V2_MODEL_PATH, 'stage3', '50_amount_reactant_regression_fp_baseline_fp2048_dense512', 'model-densegraph-04-0.05.hdf5.final-tf.20191118'),
         },
         'graph-20191118': {
             'encoder': os.path.join(_CONTEXT_V2_MODEL_PATH, 'stage0', 'feature-statistics-final-s-natom50.pickle'),

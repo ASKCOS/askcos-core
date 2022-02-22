@@ -1,8 +1,8 @@
 ARG BASE_VERSION=2020.03.6-gh2855-py37-conda
 ARG DATA_VERSION=dev
 
-FROM registry.gitlab.com/mlpds_mit/askcos/askcos-data:$DATA_VERSION as data
-FROM registry.gitlab.com/mlpds_mit/askcos/askcos-base:$BASE_VERSION
+FROM askcos/askcos-data:$DATA_VERSION as data
+FROM askcos/askcos-base:$BASE_VERSION
 
 USER root
 

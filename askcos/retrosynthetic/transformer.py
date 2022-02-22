@@ -12,6 +12,7 @@ from askcos.prioritization.precursors.scscore import SCScorePrecursorPrioritizer
 from askcos.prioritization.precursors.relevanceheuristic import RelevanceHeuristicPrecursorPrioritizer
 from askcos.prioritization.templates.relevance import RelevanceTemplatePrioritizer
 from askcos.synthetic.evaluation.fast_filter import FastFilterScorer
+from askcos.utilities.banned import BANNED_SMILES
 from askcos.utilities.cluster import cluster_precursors
 from askcos.utilities.descriptors import rms_molecular_weight, number_of_rings
 from askcos.utilities.io.logger import MyLogger
@@ -220,7 +221,7 @@ class RetroTransformer(TemplateTransformer):
             fast_filter=None, fast_filter_threshold=0.75,
             max_num_templates=100, max_cum_prob=0.995,
             cluster_precursors=True, cluster=None, cluster_settings=None,
-            selec_check=False, attribute_filter=[], **kwargs
+            selec_check=False, attribute_filter=[], use_ban_list=True, **kwargs
     ):
         """Performs a one-step retrosynthesis given a SMILES string.
 
@@ -301,6 +302,9 @@ class RetroTransformer(TemplateTransformer):
 
         results = []
         smiles_to_index = {}
+
+        if use_ban_list and smiles in BANNED_SMILES:
+            return results
 
         scores, indices = template_prioritizer.predict(smiles, max_num_templates=None, max_cum_prob=None)
 
@@ -454,7 +458,7 @@ class RetroTransformer(TemplateTransformer):
     def apply_one_template_by_idx(
             self, _id, smiles, template_idx, calculate_next_probs=True,
             fast_filter_threshold=0.75, max_num_templates=100, max_cum_prob=0.995,
-            template_prioritizer=None, template_set=None, fast_filter=None
+            template_prioritizer=None, template_set=None, fast_filter=None, use_ban_list=True,
     ):
         """Applies one template by index.
 
@@ -499,6 +503,10 @@ class RetroTransformer(TemplateTransformer):
         all_outcomes = []
         seen_reactants = {}
         seen_reactant_combos = []
+
+        if use_ban_list and smiles in BANNED_SMILES:
+            all_outcomes.append((_id, smiles, template_idx, [], 0.0))  # dummy outcome
+            return all_outcomes
 
         template = self.get_one_template_by_idx(template_idx, template_set)
 

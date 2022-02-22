@@ -14,6 +14,7 @@ from pymongo import MongoClient
 import askcos.global_config as gc
 from askcos.retrosynthetic.mcts.nodes import Chemical, Reaction, ChemicalTemplateApplication
 from askcos.retrosynthetic.transformer import RetroTransformer
+from askcos.utilities.banned import BANNED_SMILES
 from askcos.utilities.buyable.pricer import Pricer
 from askcos.utilities.descriptors import rms_molecular_weight, number_of_rings
 from askcos.utilities.formats import chem_dict, rxn_dict
@@ -1095,6 +1096,7 @@ class MCTS:
                           template_set='reaxys',
                           buyables_source=None,
                           pathway_ranker=None,
+                          use_ban_list=True,
                           **kwargs):
         """Returns trees with path ending in buyable chemicals.
 
@@ -1162,6 +1164,9 @@ class MCTS:
             tree_status ((int, int, int)): Result of ``tree_status``.
             graph (dict): Full explored graph as networkx node link json
         """
+        if use_ban_list and smiles in BANNED_SMILES:
+            return (0, 0, []), []
+
         self.smiles = smiles
         self.max_depth = max_depth
         self.max_branching = max_branching

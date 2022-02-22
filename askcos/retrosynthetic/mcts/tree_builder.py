@@ -1165,7 +1165,7 @@ class MCTS:
             graph (dict): Full explored graph as networkx node link json
         """
         if use_ban_list and smiles in BANNED_SMILES:
-            return (0, 0, []), []
+            return [], (0, 0, 0), {}
 
         self.smiles = smiles
         self.max_depth = max_depth

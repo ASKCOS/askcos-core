@@ -9,6 +9,7 @@ from rdkit import Chem
 from rdchiral.initialization import rdchiralReaction, rdchiralReactants
 
 from askcos.retrosynthetic.mcts.utils import nx_graph_to_paths, nx_paths_to_json
+from askcos.utilities.banned import BANNED_SMILES
 from askcos.utilities.descriptors import rms_molecular_weight, number_of_rings
 from askcos.utilities.io.logger import MyLogger
 
@@ -286,6 +287,9 @@ class MCTS:
             tree_status ((int, int, int)): Result of ``tree_status``.
             graph (dict): Full explored graph as networkx node link json
         """
+        if kwargs.get('use_ban_list', True) and target in BANNED_SMILES:
+            return [], (0, 0, 0), {}
+
         self.build_tree(target, **kwargs)
         paths = self.enumerate_paths(**kwargs)
         status = self.tree_status()
@@ -296,6 +300,9 @@ class MCTS:
         """
         Build retrosynthesis tree by iterative expansion of precursor nodes.
         """
+        if kwargs.get('use_ban_list', True) and target in BANNED_SMILES:
+            return
+
         self.set_options(**kwargs)
 
         MyLogger.print_and_log('Initializing tree...', treebuilder_loc)

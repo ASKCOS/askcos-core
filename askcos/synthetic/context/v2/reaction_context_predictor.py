@@ -376,7 +376,7 @@ class ReactionContextRecommenderFP:
     
     def predict_temperature(self, smiles=None, reagents=None, encoded_graph=None, encoded_reagents=None):
         if encoded_graph is None:
-            encoded_graph = self.encode_condensed_graph(smiles, 16384)
+            encoded_graph = self.encode_condensed_graph(smiles)
         if encoded_reagents is None:
             encoded_reagents = self.encode_reagents(reagents)
         data_input = copy.copy(encoded_graph)

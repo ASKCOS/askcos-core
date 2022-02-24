@@ -37,7 +37,7 @@ class ForwardTransformer(TemplateTransformer, ForwardEnumerator):
 
     """
 
-    def __init__(self, use_db=False, TEMPLATE_DB=None, load_all=True):
+    def __init__(self, load_all=True):
         """Initializes ForwardTransformer.
 
         ??VV??
@@ -52,12 +52,10 @@ class ForwardTransformer(TemplateTransformer, ForwardEnumerator):
                 (default: {False})
         """
 
-        self.use_db = use_db
-        self.TEMPLATE_DB = TEMPLATE_DB
         self.templates = []
         self.id_to_index = {}
 
-        super(ForwardTransformer, self).__init__(load_all=load_all, use_db=use_db)
+        super(ForwardTransformer, self).__init__(load_all=load_all)
 
     def template_count(self):
         """Returns number of templates loaded?? by transformer."""

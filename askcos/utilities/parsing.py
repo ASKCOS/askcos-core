@@ -13,6 +13,17 @@ def canonicalize_smiles(smiles):
     #rdkit defaults canonicalize to true
     return Chem.MolToSmiles(Chem.MolFromSmiles(smiles))
 
+
+def canonicalize_mapped_smiles(smiles):
+    """remove atommap number and canonicalized SMILES string
+    """
+    m = Chem.MolFromSmiles(smiles)
+    for a in m.GetAtoms():
+        a.ClearProp('molAtomMapNumber')
+        a.SetIsotope(0)
+    return Chem.MolToSmiles(m)
+
+
 def parse_molecule_to_smiles(target):
     """Parses a molecular type (smiles, rdkit mol or mol file) to smiles format).
 

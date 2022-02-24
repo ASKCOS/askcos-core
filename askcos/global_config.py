@@ -38,6 +38,7 @@ rank = 'Rank'
 # For context recommendation
 nearest_neighbor = 'Nearest_Neighbor'
 neural_network = 'Neural_Network'
+context_neural_network_v2 = 'Neural_Network_V2'
 
 # For forward prediction
 template = 'Template'
@@ -72,6 +73,7 @@ forward_scoring = network
 data_path = os.path.join(os.path.dirname(__file__),'data')
 local_db_dumps = os.path.join(data_path, 'local_db_dumps')
 models_path = os.path.join(data_path, 'models')
+scalers_path = os.path.join(data_path, 'scalers')
 
 fingerprint_bits = 256
 reaction_fingerprint_bits = 2048
@@ -83,14 +85,13 @@ database = 'askcos'
 # Define databases (should be nonessential if all local files present)
 ################################################################################
 
-MONGO_HOST = os.environ.get('MONGO_HOST', 'MONGO_HOST')
-MONGO_USER = os.environ.get('MONGO_USER', 'USERNAME')
-MONGO_PW = os.environ.get('MONGO_PW', 'PASSWORD')
-
 MONGO = {
-    'path': 'mongodb://{}:{}@{}'.format(MONGO_USER, MONGO_PW, MONGO_HOST),
-    'id': 27017,
-    'connect': False
+    'host': os.environ.get('MONGO_HOST'),
+    'port': int(os.environ.get('MONGO_PORT', 27017)),
+    'username': os.environ.get('MONGO_USER'),
+    'password': os.environ.get('MONGO_PW'),
+    'authSource': os.environ.get('MONGO_AUTH_DB', 'admin'),
+    'connect': False,
 }
 
 RETRO_TEMPLATES = {
@@ -164,6 +165,35 @@ NEURALNET_CONTEXT_REC = {
     'database': database,
 }
 
+_CONTEXT_V2_MODEL_PATH = os.path.join(models_path, 'context', 'v2')
+CONTEXT_V2 = {
+    'reagent_conv_rules': os.path.join(_CONTEXT_V2_MODEL_PATH, 'stage0', 'reagent_conv_rules.json'),
+    'default-models': {
+        'graph': 'graph-20191118',
+        'fp': 'fp-20191118',
+    },
+    'models': {
+        'fp-20191118': {
+            'fp_len': 2048,
+            'fp_rad': 3,
+            'reagents': os.path.join(_CONTEXT_V2_MODEL_PATH, 'stage0', 'reagents_list_minocc100.json'),
+            'reagents_model': os.path.join(_CONTEXT_V2_MODEL_PATH, 'stage1', 'fp_multicategorical_50_input_reagents_fplength2048_fpradius3', 'model-densegraph-04-4.27.hdf5.final-tf.20191118'),
+            'temperature_model': os.path.join(_CONTEXT_V2_MODEL_PATH, 'stage2', '50_temperature_regression_fp_baseline_fp2048', 'model-densegraph-40-0.02.hdf5.final-tf.20191118'),
+            'reagents_amount_model': os.path.join(_CONTEXT_V2_MODEL_PATH, 'stage3', '50_amount_regression_fp_baseline_fp2048', 'model-densegraph-48-0.00.hdf5.final-tf.20191118'),
+            'reactants_amount_model': os.path.join(_CONTEXT_V2_MODEL_PATH, 'stage3', '50_amount_reactant_regression_fp_baseline_fp2048_dense512', 'model-densegraph-04-0.05.hdf5.final-tf.20191118'),
+        },
+        'graph-20191118': {
+            'encoder': os.path.join(_CONTEXT_V2_MODEL_PATH, 'stage0', 'feature-statistics-final-s-natom50.pickle'),
+            'reagents': os.path.join(_CONTEXT_V2_MODEL_PATH, 'stage0', 'reagents_list_minocc100.json'),
+            'reagents_model': os.path.join(_CONTEXT_V2_MODEL_PATH, 'stage1', '50_multicategorical_input_reagents_wlnlen512_wlnstep3', 'model-densegraph-08-4.08.hdf5.final-tf.20191118'),
+            'temperature_model': os.path.join(_CONTEXT_V2_MODEL_PATH, 'stage2', '50_temperature_regression', 'model-densegraph-16-0.02.hdf5.final-tf.20191118'),
+            'reagents_amount_model': os.path.join(_CONTEXT_V2_MODEL_PATH, 'stage3', '50_amount_regression', 'model-densegraph-08-0.00.hdf5.final-tf.20191118'),
+            'reactants_amount_model': os.path.join(_CONTEXT_V2_MODEL_PATH, 'stage3', '50_amount_reactant_regression_dense2048_3', 'model-densegraph-08-0.05.hdf5.final-tf.20191118'),
+            'condensed_graph': True,
+        },
+    },
+}
+
 TEMPLATE_FREE_FORWARD_PREDICTOR = {
     'core_model_path': os.path.join(models_path, 'forward_predictor', 'rexgen_direct', 'core_wln_global', 'model-300-3-direct', 'model.ckpt-140000'),
     'rank_model_path': os.path.join(models_path, 'forward_predictor', 'rexgen_direct', 'rank_diff_wln', 'model-core16-500-3-max150-direct-useScores', 'model.ckpt-2400000')
@@ -174,10 +204,17 @@ SELECTIVITY = {
 }
 
 GEN_SELECTIVITY = {
-    'model_path': os.path.join(models_path, 'selectivity', 'general_selectivity', 'best_model.hdf5'),
-    'initializer': '[CH4:1]>>[CH4:1]',
-    'atom_fdim': 82,
-    'bond_fdim': 6,
-    'max_nb': 10,
-    'binary_fdim': 11,
+    'model_path': {'GNN': os.path.join(models_path, 'selectivity', 'general_selectivity', 'GNN_best_model.hdf5'),
+                   'QM_GNN': os.path.join(models_path, 'selectivity', 'general_selectivity', 'QM_GNN_best_model.hdf5'),
+                   'QM_GNN_no_reagent': os.path.join(models_path, 'selectivity', 'general_selectivity', 'QM_GNN_best_model_no_reagent.hdf5')
+                   },
+    'scalers': os.path.join(scalers_path, 'QM_desc_selec.pickle'),
+}
+
+PATHWAY_RANKER = {
+    'model_path': os.path.join(models_path, 'pathway_ranker', 'treeLSTM512-fp2048.pt')
+}
+
+DESCRIPTORS = {
+    'model_path': os.path.join(models_path, 'descriptors', 'QM_137k.pt')
 }

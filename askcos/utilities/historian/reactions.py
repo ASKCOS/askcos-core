@@ -52,8 +52,7 @@ class ReactionHistorian:
 
     def load_databases(self):
         """Loads the history data from the online database."""
-        db_client = MongoClient(gc.MONGO['path'], gc.MONGO[
-                                'id'], connect=gc.MONGO['connect'])
+        db_client = MongoClient(**gc.MONGO)
         db = db_client[gc.REACTIONS['database']]
         self.REACTION_DB = db[gc.REACTIONS['collection']]
 

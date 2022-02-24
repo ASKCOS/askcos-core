@@ -1,25 +1,24 @@
-ARG BASE_VERSION=2019.03.4-gh2855-py35
+ARG BASE_VERSION=2020.03.6-gh2855-py37-conda
 ARG DATA_VERSION=dev
 
 FROM askcos/askcos-data:$DATA_VERSION as data
-
 FROM askcos/askcos-base:$BASE_VERSION
 
-RUN apt-get update && \
-    apt-get install -y libboost-thread-dev libboost-python-dev libboost-iostreams-dev python-tk libopenblas-dev libeigen3-dev libcairo2-dev pkg-config python-dev python-mysqldb && \
-    useradd -ms /bin/bash askcos
+USER root
 
-COPY requirements.txt requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt && rm requirements.txt
+RUN conda install pytorch=1.4=cpu_py37h7e40bad_0 && \
+    find /opt/conda/ -follow -type f -name '*.a' -delete && \
+    find /opt/conda/ -follow -type f -name '*.js.map' -delete && \
+    /opt/conda/bin/conda clean -afy
 
-COPY --from=data /data /usr/local/askcos-core/askcos/data
+USER askcos
 
+COPY --chown=askcos:askcos --from=data /data /usr/local/askcos-core/askcos/data
 COPY --chown=askcos:askcos . /usr/local/askcos-core
 
 WORKDIR /home/askcos
-USER askcos
 
-ENV PYTHONPATH=/usr/local/askcos-core:${PYTHONPATH}
+ENV PYTHONPATH=/usr/local/askcos-core${PYTHONPATH:+:${PYTHONPATH}}
 
 LABEL core.version={VERSION} \
       core.git.hash={GIT_HASH} \

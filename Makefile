@@ -46,4 +46,5 @@ debug:
 	docker run -it --rm -w /usr/local/askcos-core $(VOLUMES) $(REGISTRY):$(TAG) /bin/bash
 
 test:
-	docker run --rm -w /usr/local/askcos-core $(VOLUMES) $(REGISTRY):$(TAG) /bin/bash -c "python -m unittest discover -v -p '*test.py' -s askcos"
+	docker run --rm -w /usr/local/askcos-core $(VOLUMES) $(REGISTRY):$(TAG) python -m unittest discover -v -p '*test.py' -s askcos
+	docker run --rm -w /usr/local/askcos-core $(VOLUMES) $(REGISTRY):$(TAG) python -m unittest -v askcos.retrosynthetic.mcts.tree_builder_test
